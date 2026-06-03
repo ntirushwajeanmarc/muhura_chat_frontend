@@ -18,7 +18,8 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = async (email, password) => {
-    const res = await axios.post('/api/auth/login', { email, password });
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:4000';
+    const res = await axios.post(`${backendUrl}/api/auth/login`, { email, password });
     const { token: t, user: u } = res.data;
     localStorage.setItem('token', t);
     localStorage.setItem('user', JSON.stringify(u));
@@ -29,7 +30,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (username, email, password) => {
-    const res = await axios.post('/api/auth/register', { username, email, password });
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:4000';
+    const res = await axios.post(`${backendUrl}/api/auth/register`, { username, email, password });
     const { token: t, user: u } = res.data;
     localStorage.setItem('token', t);
     localStorage.setItem('user', JSON.stringify(u));

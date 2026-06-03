@@ -9,7 +9,7 @@ export const useSocket = (token) => {
   useEffect(() => {
     if (!token) return;
 
-    const socketUrl = process.env.REACT_APP_SOCKET_URL || '/';
+    const socketUrl = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
     if (socketInstance) {
       socketInstance.disconnect();

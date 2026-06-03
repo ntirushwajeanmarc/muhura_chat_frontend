@@ -30,7 +30,8 @@ export default function ChatPage() {
 
   // Fetch rooms
   useEffect(() => {
-    axios.get('/api/rooms').then(res => {
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:4000';
+    axios.get(`${backendUrl}/api/rooms`).then(res => {
       setRooms(res.data);
       if (res.data.length > 0) setActiveRoom(res.data[0]);
     });
@@ -40,7 +41,8 @@ export default function ChatPage() {
   useEffect(() => {
     if (!activeRoom) return;
     joinRoom(activeRoom.id);
-    axios.get(`/api/rooms/${activeRoom.id}/messages`).then(res => setMessages(res.data));
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:4000';
+    axios.get(`${backendUrl}/api/rooms/${activeRoom.id}/messages`).then(res => setMessages(res.data));
     setTypingUsers([]);
   }, [activeRoom, joinRoom]);
 
