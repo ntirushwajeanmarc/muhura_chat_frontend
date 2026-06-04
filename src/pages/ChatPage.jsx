@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { BACKEND_URL } from '../config';
+import MessageContent from '../components/MessageContent';
 
 const Avatar = ({ username, color, size = 36 }) => (
   <div style={{
@@ -67,7 +68,7 @@ export default function ChatPage() {
   const handleSend = (e) => {
     e.preventDefault();
     if (!input.trim() || !activeRoom) return;
-    sendMessage(activeRoom.id, input.trim());
+    sendMessage(activeRoom.id, input);
     setInput('');
     sendTyping(activeRoom.id, false);
   };
@@ -157,7 +158,9 @@ export default function ChatPage() {
                 </div>
               )}
               <div className={`msg-body ${msg.grouped ? 'msg-body-grouped' : ''}`}>
-                <div className="msg-bubble">{msg.content}</div>
+                <div className="msg-bubble">
+                  <MessageContent content={msg.content} />
+                </div>
               </div>
             </div>
           ))}
@@ -172,12 +175,19 @@ export default function ChatPage() {
         </div>
 
         <form className="message-form" onSubmit={handleSend}>
-          <input
+          <textarea
             className="message-input"
             value={input}
             onChange={handleInputChange}
-            placeholder={`Message #${activeRoom?.name || '...'}`}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
+            }}
+            placeholder={`Message #${activeRoom?.name || '...'} (Shift+Enter for new line)`}
             disabled={!activeRoom}
+            rows={1}
             autoFocus
           />
           <button type="submit" className="send-btn" disabled={!input.trim()}>
