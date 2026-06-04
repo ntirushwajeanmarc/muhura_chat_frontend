@@ -120,13 +120,27 @@ export default function ChatPage() {
     typingTimeoutRef.current = setTimeout(() => sendTyping(activeRoom?.id, false), 1500);
   };
 
+  const dedupeRooms = useCallback((list) => {
+    const byName = new Map();
+    list.forEach((room) => {
+      const existing = byName.get(room.name);
+      if (!existing || new Date(room.created_at) < new Date(existing.created_at)) {
+        byName.set(room.name, room);
+      }
+    });
+    return [...byName.values()].sort(
+      (a, b) => new Date(a.created_at) - new Date(b.created_at)
+    );
+  }, []);
+
   // Fetch rooms
   useEffect(() => {
     axios.get(`${BACKEND_URL}/api/rooms`).then(res => {
-      setRooms(res.data);
-      if (res.data.length > 0) setActiveRoom(res.data[0]);
+      const unique = dedupeRooms(res.data);
+      setRooms(unique);
+      if (unique.length > 0) setActiveRoom(unique[0]);
     });
-  }, []);
+  }, [dedupeRooms]);
 
   // Join room & fetch messages when room changes
   useEffect(() => {
