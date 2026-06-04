@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { BACKEND_URL } from '../config';
 import MessageContent from '../components/MessageContent';
+import CopyButton from '../components/CopyButton';
+import EmojiPicker from '../components/EmojiPicker';
 
 const Avatar = ({ username, color, size = 36 }) => (
   <div style={{
@@ -29,6 +31,28 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const insertEmoji = (emoji) => {
+    const el = inputRef.current;
+    if (!el) {
+      setInput((prev) => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = input.slice(0, start) + emoji + input.slice(end);
+    setInput(next);
+    requestAnimationFrame(() => {
+      const pos = start + emoji.length;
+      el.selectionStart = pos;
+      el.selectionEnd = pos;
+      el.focus();
+    });
+    sendTyping(activeRoom?.id, true);
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => sendTyping(activeRoom?.id, false), 1500);
+  };
 
   // Fetch rooms
   useEffect(() => {
@@ -159,6 +183,7 @@ export default function ChatPage() {
               )}
               <div className={`msg-body ${msg.grouped ? 'msg-body-grouped' : ''}`}>
                 <div className="msg-bubble">
+                  <CopyButton text={msg.content} className="msg-copy-btn" title="Copy message" />
                   <MessageContent content={msg.content} />
                 </div>
               </div>
@@ -175,21 +200,25 @@ export default function ChatPage() {
         </div>
 
         <form className="message-form" onSubmit={handleSend}>
-          <textarea
-            className="message-input"
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e);
-              }
-            }}
-            placeholder={`Message #${activeRoom?.name || '...'} (Shift+Enter for new line)`}
-            disabled={!activeRoom}
-            rows={1}
-            autoFocus
-          />
+          <div className="message-input-wrap">
+            <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
+            <textarea
+              ref={inputRef}
+              className="message-input"
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(e);
+                }
+              }}
+              placeholder={`Message #${activeRoom?.name || '...'} (Shift+Enter for new line)`}
+              disabled={!activeRoom}
+              rows={1}
+              autoFocus
+            />
+          </div>
           <button type="submit" className="send-btn" disabled={!input.trim()}>
             ➤
           </button>
