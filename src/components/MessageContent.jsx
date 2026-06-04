@@ -1,5 +1,5 @@
 import React from 'react';
-import CopyButton from './CopyButton';
+import CodeBlock from './CodeBlock';
 
 const FENCE_RE = /```(\w*)\n?([\s\S]*?)```/g;
 
@@ -47,16 +47,6 @@ export function parseMessageContent(content) {
   }
 
   return segments;
-}
-
-function CodeBlock({ code, lang }) {
-  return (
-    <div className={`msg-code-block${lang ? ' has-lang' : ''}`}>
-      {lang && <span className="msg-code-lang">{lang}</span>}
-      <CopyButton text={code} className="msg-code-copy" title="Copy code" />
-      <pre><code>{code}</code></pre>
-    </div>
-  );
 }
 
 function TextPart({ text }) {

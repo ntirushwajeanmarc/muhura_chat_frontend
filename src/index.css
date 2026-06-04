@@ -322,66 +322,72 @@ body {
 .msg-text { white-space: pre-wrap; word-break: break-word; }
 .msg-text-pre { display: block; }
 
+/* Syntax-highlighted code blocks (ChatGPT-style) */
 .msg-code-block {
-  position: relative;
-  background: #0a0d14;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid #30363d;
+  border-radius: 10px;
   overflow: hidden;
   max-width: 100%;
+  background: #0d1117;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.msg-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 8px 14px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
 }
 .msg-code-lang {
-  position: absolute;
-  top: 8px;
-  left: 12px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text3);
-  font-family: var(--mono);
-  z-index: 1;
+  color: #8b949e;
+  font-family: var(--font);
+  letter-spacing: 0.02em;
 }
-.msg-code-block.has-lang pre {
-  padding-top: 28px;
-}
-.msg-code-block pre {
+.msg-code-pre {
   margin: 0;
-  padding: 12px 44px 12px 14px;
+  padding: 14px 16px;
   overflow-x: auto;
+  background: #0d1117;
+}
+.msg-code-pre::-webkit-scrollbar { height: 6px; }
+.msg-code-pre::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+.msg-code-hljs {
+  display: block;
   font-family: var(--mono);
   font-size: 13px;
-  line-height: 1.55;
-  color: #c9d1d9;
-  white-space: pre;
+  line-height: 1.6;
   tab-size: 2;
+  white-space: pre;
+  background: transparent !important;
+  padding: 0 !important;
 }
-.msg-code-block pre code {
-  font-family: inherit;
-  white-space: inherit;
+.msg-code-hljs.hljs {
+  color: #e6edf3;
 }
 .msg-code-copy {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
+  position: static;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid #30363d;
   border-radius: 6px;
-  background: var(--bg2);
-  color: var(--text2);
+  background: #21262d;
+  color: #8b949e;
   cursor: pointer;
+  flex-shrink: 0;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .msg-code-copy:hover {
-  color: var(--text);
-  border-color: var(--accent);
-  background: var(--bg3);
+  color: #e6edf3;
+  border-color: #484f58;
+  background: #30363d;
 }
 
 .typing-indicator {
