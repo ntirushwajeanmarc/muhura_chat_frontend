@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { BACKEND_URL } from '../config';
+import { fetchRoomMessages } from '../api/messages';
 import MessageContent from '../components/MessageContent';
 import CopyButton from '../components/CopyButton';
 import EmojiPicker from '../components/EmojiPicker';
@@ -31,13 +32,17 @@ export default function ChatPage() {
   const [typingUsers, setTypingUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const messagesAreaRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
   const stickToBottomRef = useRef(true);
+  const loadingOlderRef = useRef(false);
 
   const SCROLL_THRESHOLD = 80;
+  const LOAD_OLDER_THRESHOLD = 120;
 
   const isNearBottom = useCallback(() => {
     const el = messagesAreaRef.current;
@@ -48,6 +53,51 @@ export default function ChatPage() {
   const scrollToBottom = useCallback((behavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
+
+  const mergeMessages = useCallback((existing, incoming) => {
+    const seen = new Set(existing.map((m) => m.id));
+    const unique = incoming.filter((m) => !seen.has(m.id));
+    return [...existing, ...unique];
+  }, []);
+
+  const loadInitialMessages = useCallback(async (roomId) => {
+    const { messages: data, hasMore } = await fetchRoomMessages(roomId);
+    setMessages(data);
+    setHasMoreOlder(hasMore);
+    requestAnimationFrame(() => scrollToBottom('auto'));
+  }, [scrollToBottom]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeRoom || loadingOlderRef.current || !hasMoreOlder) return;
+    const oldest = messages[0];
+    if (!oldest?.id) return;
+
+    const el = messagesAreaRef.current;
+    const prevScrollHeight = el?.scrollHeight ?? 0;
+    const prevScrollTop = el?.scrollTop ?? 0;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const { messages: older, hasMore } = await fetchRoomMessages(activeRoom.id, {
+        before: oldest.id,
+      });
+      if (older.length > 0) {
+        setMessages((prev) => mergeMessages(older, prev));
+        requestAnimationFrame(() => {
+          if (el) {
+            el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop;
+          }
+        });
+      }
+      setHasMoreOlder(hasMore);
+    } catch {
+      /* keep hasMoreOlder so user can retry */
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [activeRoom, hasMoreOlder, messages, mergeMessages]);
 
   const insertEmoji = (emoji) => {
     const el = inputRef.current;
@@ -82,25 +132,27 @@ export default function ChatPage() {
   useEffect(() => {
     if (!activeRoom) return;
     stickToBottomRef.current = true;
+    setMessages([]);
+    setHasMoreOlder(false);
     joinRoom(activeRoom.id);
-    axios.get(`${BACKEND_URL}/api/rooms/${activeRoom.id}/messages`).then(res => {
-      setMessages(res.data);
-      requestAnimationFrame(() => scrollToBottom('auto'));
-    });
+    loadInitialMessages(activeRoom.id);
     setTypingUsers([]);
     setReplyingTo(null);
-  }, [activeRoom, joinRoom, scrollToBottom]);
+  }, [activeRoom, joinRoom, loadInitialMessages]);
 
-  // Track whether user is reading history (scrolled up) vs at the bottom
+  // Track scroll position; load older messages when scrolled near the top
   useEffect(() => {
     const el = messagesAreaRef.current;
     if (!el) return;
     const onScroll = () => {
       stickToBottomRef.current = isNearBottom();
+      if (el.scrollTop <= LOAD_OLDER_THRESHOLD) {
+        loadOlderMessages();
+      }
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [isNearBottom, activeRoom?.id]);
+  }, [isNearBottom, activeRoom?.id, loadOlderMessages]);
 
   // Socket events
   useEffect(() => {
@@ -218,6 +270,15 @@ export default function ChatPage() {
         </header>
 
         <div className="messages-area" ref={messagesAreaRef}>
+          {loadingOlder && (
+            <div className="messages-load-older">Loading older messages…</div>
+          )}
+          {!loadingOlder && hasMoreOlder && messages.length > 0 && (
+            <div className="messages-load-hint">Scroll up for older messages</div>
+          )}
+          {!hasMoreOlder && messages.length > 0 && (
+            <div className="messages-start-hint">Beginning of conversation</div>
+          )}
           {groupMessages(messages).map(msg => (
             <div key={msg.id} className={`message ${msg.grouped ? 'grouped' : ''} ${msg.username === user?.username ? 'own' : ''}`}>
               {!msg.grouped && (
