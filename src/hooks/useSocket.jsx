@@ -9,7 +9,7 @@ export const useSocket = (token) => {
   useEffect(() => {
     if (!token) return;
 
-    const socketUrl = 'https://www.rwandablogs.blog';
+    const socketUrl = 'https://rwandablogs.blog';
 
     if (socketInstance) {
       socketInstance.disconnect();
