@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = async (email, password) => {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
+    const backendUrl = 'https://www.rwandablogs.blog';
     const res = await axios.post(`${backendUrl}/api/auth/login`, { email, password });
     const { token: t, user: u } = res.data;
     localStorage.setItem('token', t);
@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (username, email, password) => {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
+    const backendUrl = 'https://www.rwandablogs.blog';
     const res = await axios.post(`${backendUrl}/api/auth/register`, { username, email, password });
     const { token: t, user: u } = res.data;
     localStorage.setItem('token', t);

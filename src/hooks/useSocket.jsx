@@ -9,7 +9,7 @@ export const useSocket = (token) => {
   useEffect(() => {
     if (!token) return;
 
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
+    const socketUrl = 'https://www.rwandablogs.blog';
 
     if (socketInstance) {
       socketInstance.disconnect();
