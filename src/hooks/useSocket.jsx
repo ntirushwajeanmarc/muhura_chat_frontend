@@ -33,8 +33,8 @@ export const useSocket = (token) => {
     socketRef.current?.emit('join_room', roomId);
   }, []);
 
-  const sendMessage = useCallback((roomId, content) => {
-    socketRef.current?.emit('send_message', { roomId, content });
+  const sendMessage = useCallback((roomId, content, replyToId = null) => {
+    socketRef.current?.emit('send_message', { roomId, content, replyToId });
   }, []);
 
   const sendTyping = useCallback((roomId, isTyping) => {

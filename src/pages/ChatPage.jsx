@@ -6,6 +6,7 @@ import { BACKEND_URL } from '../config';
 import MessageContent from '../components/MessageContent';
 import CopyButton from '../components/CopyButton';
 import EmojiPicker from '../components/EmojiPicker';
+import ReplyButton, { truncateReply } from '../components/ReplyButton';
 
 const Avatar = ({ username, color, size = 36 }) => (
   <div style={{
@@ -29,6 +30,7 @@ export default function ChatPage() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [replyingTo, setReplyingTo] = useState(null);
   const messagesAreaRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -86,6 +88,7 @@ export default function ChatPage() {
       requestAnimationFrame(() => scrollToBottom('auto'));
     });
     setTypingUsers([]);
+    setReplyingTo(null);
   }, [activeRoom, joinRoom, scrollToBottom]);
 
   // Track whether user is reading history (scrolled up) vs at the bottom
@@ -123,8 +126,9 @@ export default function ChatPage() {
   const handleSend = (e) => {
     e.preventDefault();
     if (!input.trim() || !activeRoom) return;
-    sendMessage(activeRoom.id, input);
+    sendMessage(activeRoom.id, input, replyingTo?.id ?? null);
     setInput('');
+    setReplyingTo(null);
     sendTyping(activeRoom.id, false);
     stickToBottomRef.current = true;
     requestAnimationFrame(() => scrollToBottom('smooth'));
@@ -138,6 +142,15 @@ export default function ChatPage() {
   };
 
   const formatTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const startReply = (msg) => {
+    setReplyingTo({
+      id: msg.id,
+      username: msg.username,
+      content: msg.content,
+    });
+    inputRef.current?.focus();
+  };
 
   const groupMessages = (msgs) => {
     const grouped = [];
@@ -216,7 +229,16 @@ export default function ChatPage() {
               )}
               <div className={`msg-body ${msg.grouped ? 'msg-body-grouped' : ''}`}>
                 <div className="msg-bubble">
-                  <CopyButton text={msg.content} className="msg-copy-btn" title="Copy message" />
+                  <div className="msg-actions">
+                    <ReplyButton onClick={() => startReply(msg)} />
+                    <CopyButton text={msg.content} className="msg-copy-btn" title="Copy message" />
+                  </div>
+                  {msg.reply_to && (
+                    <div className="msg-reply-quote">
+                      <span className="msg-reply-quote-user">@{msg.reply_to.username}</span>
+                      <span className="msg-reply-quote-text">{truncateReply(msg.reply_to.content)}</span>
+                    </div>
+                  )}
                   <MessageContent content={msg.content} />
                 </div>
               </div>
@@ -232,6 +254,23 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
+        {replyingTo && (
+          <div className="reply-compose-bar">
+            <div className="reply-compose-text">
+              <span className="reply-compose-label">Replying to @{replyingTo.username}</span>
+              <span className="reply-compose-snippet">{truncateReply(replyingTo.content, 120)}</span>
+            </div>
+            <button
+              type="button"
+              className="reply-compose-cancel"
+              onClick={() => setReplyingTo(null)}
+              aria-label="Cancel reply"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <form className="message-form" onSubmit={handleSend}>
           <div className="message-input-wrap">
             <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
@@ -241,12 +280,21 @@ export default function ChatPage() {
               value={input}
               onChange={handleInputChange}
               onKeyDown={(e) => {
+                if (e.key === 'Escape' && replyingTo) {
+                  e.preventDefault();
+                  setReplyingTo(null);
+                  return;
+                }
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSend(e);
                 }
               }}
-              placeholder={`Message #${activeRoom?.name || '...'} (Shift+Enter for new line)`}
+              placeholder={
+                replyingTo
+                  ? `Reply to @${replyingTo.username}…`
+                  : `Message #${activeRoom?.name || '...'} (Shift+Enter for new line)`
+              }
               disabled={!activeRoom}
               rows={1}
               autoFocus
