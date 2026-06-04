@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { SOCKET_URL } from '../config';
 
 let socketInstance = null;
 
@@ -9,14 +10,12 @@ export const useSocket = (token) => {
   useEffect(() => {
     if (!token) return;
 
-    const socketUrl = 'https://www.rwandablogs.blog';
-
     if (socketInstance) {
       socketInstance.disconnect();
       socketInstance = null;
     }
 
-    socketInstance = io(socketUrl, {
+    socketInstance = io(SOCKET_URL, {
       auth: { token },
       path: '/socket.io',
     });

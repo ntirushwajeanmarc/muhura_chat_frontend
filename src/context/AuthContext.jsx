@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { BACKEND_URL } from '../config';
 
 const AuthContext = createContext(null);
 
@@ -18,8 +19,7 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = async (email, password) => {
-    const backendUrl = 'https://www.rwandablogs.blog';
-    const res = await axios.post(`${backendUrl}/api/auth/login`, { email, password });
+    const res = await axios.post(`${BACKEND_URL}/api/auth/login`, { email, password });
     const { token: t, user: u } = res.data;
     localStorage.setItem('token', t);
     localStorage.setItem('user', JSON.stringify(u));
@@ -30,8 +30,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (username, email, password) => {
-    const backendUrl = 'https://www.rwandablogs.blog';
-    const res = await axios.post(`${backendUrl}/api/auth/register`, { username, email, password });
+    const res = await axios.post(`${BACKEND_URL}/api/auth/register`, { username, email, password });
     const { token: t, user: u } = res.data;
     localStorage.setItem('token', t);
     localStorage.setItem('user', JSON.stringify(u));
