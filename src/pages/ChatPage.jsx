@@ -29,9 +29,23 @@ export default function ChatPage() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const messagesAreaRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
+  const stickToBottomRef = useRef(true);
+
+  const SCROLL_THRESHOLD = 80;
+
+  const isNearBottom = useCallback(() => {
+    const el = messagesAreaRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }, []);
 
   const insertEmoji = (emoji) => {
     const el = inputRef.current;
@@ -65,10 +79,25 @@ export default function ChatPage() {
   // Join room & fetch messages when room changes
   useEffect(() => {
     if (!activeRoom) return;
+    stickToBottomRef.current = true;
     joinRoom(activeRoom.id);
-    axios.get(`${BACKEND_URL}/api/rooms/${activeRoom.id}/messages`).then(res => setMessages(res.data));
+    axios.get(`${BACKEND_URL}/api/rooms/${activeRoom.id}/messages`).then(res => {
+      setMessages(res.data);
+      requestAnimationFrame(() => scrollToBottom('auto'));
+    });
     setTypingUsers([]);
-  }, [activeRoom, joinRoom]);
+  }, [activeRoom, joinRoom, scrollToBottom]);
+
+  // Track whether user is reading history (scrolled up) vs at the bottom
+  useEffect(() => {
+    const el = messagesAreaRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      stickToBottomRef.current = isNearBottom();
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [isNearBottom, activeRoom?.id]);
 
   // Socket events
   useEffect(() => {
@@ -84,10 +113,12 @@ export default function ChatPage() {
     return () => { offMsg?.(); offOnline?.(); offTyping?.(); };
   }, [on]);
 
-  // Auto scroll
+  // Only auto-scroll when already at the bottom (don't pull user down while reading history)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (stickToBottomRef.current) {
+      scrollToBottom('smooth');
+    }
+  }, [messages, scrollToBottom]);
 
   const handleSend = (e) => {
     e.preventDefault();
@@ -95,6 +126,8 @@ export default function ChatPage() {
     sendMessage(activeRoom.id, input);
     setInput('');
     sendTyping(activeRoom.id, false);
+    stickToBottomRef.current = true;
+    requestAnimationFrame(() => scrollToBottom('smooth'));
   };
 
   const handleInputChange = (e) => {
@@ -171,7 +204,7 @@ export default function ChatPage() {
           )}
         </header>
 
-        <div className="messages-area">
+        <div className="messages-area" ref={messagesAreaRef}>
           {groupMessages(messages).map(msg => (
             <div key={msg.id} className={`message ${msg.grouped ? 'grouped' : ''} ${msg.username === user?.username ? 'own' : ''}`}>
               {!msg.grouped && (
