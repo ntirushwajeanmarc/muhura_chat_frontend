@@ -8,6 +8,7 @@ import { fetchChats, startDirectChat, createGroupChat } from '../api/chats';
 import { uploadFile } from '../api/attachments';
 import MessageContent from '../components/MessageContent';
 import MessageAttachment from '../components/MessageAttachment';
+import PendingUploadBubble from '../components/PendingUploadBubble';
 import CopyButton from '../components/CopyButton';
 import EmojiPicker from '../components/EmojiPicker';
 import ReplyButton, { truncateReply } from '../components/ReplyButton';
@@ -46,6 +47,7 @@ export default function ChatPage() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState(null);
   const messagesAreaRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -163,6 +165,10 @@ export default function ChatPage() {
     loadInitialMessages(activeRoom.id);
     setTypingUsers([]);
     setReplyingTo(null);
+    setPendingUpload((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
   }, [activeRoom, joinRoom, loadInitialMessages]);
 
   useEffect(() => {
@@ -242,20 +248,31 @@ export default function ChatPage() {
     e.target.value = '';
     if (!file || !activeRoom || uploading) return;
 
+    const caption = input.trim();
+    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+
     setUploading(true);
+    setPendingUpload({ file, progress: 0, previewUrl, caption });
+    stickToBottomRef.current = true;
+    requestAnimationFrame(() => scrollToBottom('smooth'));
+
     try {
       await uploadFile(activeRoom.id, file, {
-        content: input.trim(),
+        content: caption,
         replyToId: replyingTo?.id ?? null,
+        onProgress: (percent) => {
+          setPendingUpload((prev) => (prev ? { ...prev, progress: percent } : prev));
+        },
       });
       setInput('');
       setReplyingTo(null);
-      stickToBottomRef.current = true;
       requestAnimationFrame(() => scrollToBottom('smooth'));
     } catch (err) {
       const message = err.response?.data?.error || 'Failed to upload file';
       alert(message);
     } finally {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPendingUpload(null);
       setUploading(false);
     }
   };
@@ -522,6 +539,15 @@ export default function ChatPage() {
             </div>
           ))}
 
+          {pendingUpload && (
+            <PendingUploadBubble
+              file={pendingUpload.file}
+              progress={pendingUpload.progress}
+              previewUrl={pendingUpload.previewUrl}
+              caption={pendingUpload.caption}
+            />
+          )}
+
           {typingUsers.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-wa-muted mt-2">
               <span className="flex gap-1">
@@ -568,7 +594,7 @@ export default function ChatPage() {
               disabled={!activeRoom || uploading}
               title="Attach file"
             >
-              {uploading ? '…' : '📎'}
+              📎
             </button>
             <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
             <textarea
