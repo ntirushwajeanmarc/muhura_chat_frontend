@@ -49,12 +49,69 @@ export function parseMessageContent(content) {
   return segments;
 }
 
+const URL_RE = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+
+function trimUrlPunctuation(url) {
+  let trimmed = url;
+  let trailing = '';
+  while (/[.,;:!?)}\]]$/.test(trimmed)) {
+    trailing = trimmed.slice(-1) + trailing;
+    trimmed = trimmed.slice(0, -1);
+  }
+  return { url: trimmed, trailing };
+}
+
+function linkifyText(text) {
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  URL_RE.lastIndex = 0;
+  while ((match = URL_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', value: text.slice(lastIndex, match.index) });
+    }
+    const { url, trailing } = trimUrlPunctuation(match[0]);
+    if (url) {
+      parts.push({
+        type: 'link',
+        value: url,
+        href: url.startsWith('www.') ? `https://${url}` : url,
+      });
+    }
+    if (trailing) parts.push({ type: 'text', value: trailing });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push({ type: 'text', value: text.slice(lastIndex) });
+  }
+
+  return parts.length > 0 ? parts : [{ type: 'text', value: text }];
+}
+
 function TextPart({ text }) {
   if (!text) return null;
   const hasNewlines = text.includes('\n');
+  const parts = linkifyText(text);
+
   return (
     <span className={hasNewlines ? 'whitespace-pre-wrap break-words' : 'break-words'}>
-      {text}
+      {parts.map((part, i) =>
+        part.type === 'link' ? (
+          <a
+            key={i}
+            href={part.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sky-400 underline underline-offset-2 hover:text-sky-300 break-all"
+          >
+            {part.value}
+          </a>
+        ) : (
+          <React.Fragment key={i}>{part.value}</React.Fragment>
+        )
+      )}
     </span>
   );
 }
