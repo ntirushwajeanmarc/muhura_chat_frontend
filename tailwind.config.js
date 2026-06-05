@@ -20,6 +20,12 @@ export default {
         sans: ['DM Sans', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
+      screens: {
+        xs: '380px',
+      },
+      spacing: {
+        safe: 'env(safe-area-inset-bottom)',
+      },
     },
   },
   plugins: [],

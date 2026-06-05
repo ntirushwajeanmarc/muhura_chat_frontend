@@ -27,6 +27,7 @@ import {
   requestNotificationPermission,
   getNotificationPrefs,
 } from '../utils/notifications';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 function roomLabel(room) {
   if (!room) return '';
@@ -52,7 +53,9 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
+  const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileShowList, setMobileShowList] = useState(true);
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editDraft, setEditDraft] = useState('');
@@ -92,6 +95,11 @@ export default function ChatPage() {
   useEffect(() => {
     requestNotificationPermission();
   }, []);
+
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(true);
+    if (isMobile && !activeRoom) setMobileShowList(true);
+  }, [isMobile, activeRoom]);
 
   useEffect(() => {
     if (!user?.id || unreadLoadedRef.current) return;
@@ -151,6 +159,7 @@ export default function ChatPage() {
     if (room) {
       setActiveRoom(room);
       setUnread((prev) => ({ ...prev, [roomId]: 0 }));
+      if (window.matchMedia('(max-width: 767px)').matches) setMobileShowList(false);
     }
   }, [findRoomById]);
 
@@ -556,6 +565,7 @@ export default function ChatPage() {
   const selectRoom = (room) => {
     setActiveRoom(room);
     setUnread((prev) => ({ ...prev, [room.id]: 0 }));
+    if (isMobile) setMobileShowList(false);
   };
 
   const handleStartDirect = async (targetUser) => {
@@ -570,7 +580,7 @@ export default function ChatPage() {
       return [chatRoom, ...prev];
     });
     joinRoom(chatRoom.id);
-    setActiveRoom(chatRoom);
+    selectRoom(chatRoom);
     setShowNewChat(false);
   };
 
@@ -578,7 +588,7 @@ export default function ChatPage() {
     const room = await createGroupChat(name, memberIds);
     setGroupChats((prev) => [room, ...prev]);
     joinRoom(room.id);
-    setActiveRoom(room);
+    selectRoom(room);
     setShowNewGroup(false);
   };
 
@@ -683,8 +693,11 @@ export default function ChatPage() {
     if (targetUserId) setProfileUserId(targetUserId);
   };
 
+  const showSidebar = !isMobile || mobileShowList;
+  const showChat = !isMobile || !mobileShowList;
+
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {showNewChat && (
         <UserSearchModal title="New chat" onSelect={handleStartDirect} onClose={() => setShowNewChat(false)} />
       )}
@@ -702,27 +715,35 @@ export default function ChatPage() {
 
       <aside
         className={`flex flex-col bg-wa-dark border-r border-wa-border transition-all duration-200 ${
-          sidebarOpen ? 'w-60 min-w-[240px]' : 'w-14 min-w-[56px]'
+          isMobile
+            ? showSidebar
+              ? 'fixed inset-0 z-30 w-full min-w-0'
+              : 'hidden'
+            : sidebarOpen
+              ? 'w-60 min-w-[240px]'
+              : 'w-14 min-w-[56px]'
         }`}
       >
         <div
-          className={`flex items-center h-[60px] border-b border-wa-border shrink-0 ${
-            sidebarOpen ? 'gap-2 px-3' : 'justify-center px-1'
+          className={`flex items-center h-14 sm:h-[60px] border-b border-wa-border shrink-0 ${
+            sidebarOpen || isMobile ? 'gap-2 px-3' : 'justify-center px-1'
           }`}
         >
-          {sidebarOpen ? (
+          {sidebarOpen || isMobile ? (
             <>
               <img src="/favicon.png" alt="" className="w-7 h-7 rounded-md shrink-0" />
               <span className="font-bold text-sm truncate flex-1">StudyChat</span>
-              <button
-                type="button"
-                className="w-9 h-9 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center shrink-0"
-                onClick={() => setSidebarOpen(false)}
-                title="Collapse sidebar"
-                aria-label="Collapse sidebar"
-              >
-                ←
-              </button>
+              {!isMobile && (
+                <button
+                  type="button"
+                  className="w-9 h-9 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center shrink-0"
+                  onClick={() => setSidebarOpen(false)}
+                  title="Collapse sidebar"
+                  aria-label="Collapse sidebar"
+                >
+                  ←
+                </button>
+              )}
             </>
           ) : (
             <button
@@ -889,8 +910,22 @@ export default function ChatPage() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col overflow-hidden bg-wa-chat">
-        <header className="flex items-center gap-3 px-5 h-[60px] border-b border-wa-border bg-wa-panel shrink-0">
+      <main
+        className={`flex-1 flex flex-col overflow-hidden bg-wa-chat min-w-0 ${
+          showChat ? '' : 'hidden md:flex'
+        }`}
+      >
+        <header className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 h-14 sm:h-[60px] border-b border-wa-border bg-wa-panel shrink-0">
+          {isMobile && activeRoom && (
+            <button
+              type="button"
+              className="touch-target w-10 h-10 -ml-1 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center shrink-0"
+              onClick={() => setMobileShowList(true)}
+              aria-label="Back to chats"
+            >
+              ←
+            </button>
+          )}
           {headerAvatar && (
             <button
               type="button"
@@ -901,22 +936,27 @@ export default function ChatPage() {
               {headerAvatar}
             </button>
           )}
-          <div className="flex items-center gap-1.5 font-semibold text-base">
+          <div className="flex items-center gap-1.5 font-semibold text-sm sm:text-base min-w-0 flex-1">
             {activeRoom?.type === 'public' && <span className="text-wa-muted">#</span>}
             {activeRoom?.type === 'group' && <span>👥</span>}
-            <span>{roomLabel(activeRoom) || 'Select a chat'}</span>
+            <span className="truncate">{roomLabel(activeRoom) || 'Select a chat'}</span>
           </div>
           {activeRoom?.type === 'group' && activeRoom.member_count && (
-            <span className="text-sm text-wa-muted border-l border-wa-border pl-3">
+            <span className="hidden sm:inline text-sm text-wa-muted border-l border-wa-border pl-3 shrink-0">
               {activeRoom.member_count} members
             </span>
           )}
           {activeRoom?.type === 'public' && activeRoom?.description && (
-            <span className="text-sm text-wa-muted border-l border-wa-border pl-3">{activeRoom.description}</span>
+            <span className="hidden md:inline text-sm text-wa-muted border-l border-wa-border pl-3 truncate">
+              {activeRoom.description}
+            </span>
           )}
         </header>
 
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-0.5 chat-wallpaper" ref={messagesAreaRef}>
+        <div
+          className="flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-0.5 chat-wallpaper overscroll-contain"
+          ref={messagesAreaRef}
+        >
           {loadingOlder && <p className="text-center text-sm text-wa-muted py-2">Loading older messages…</p>}
           {!loadingOlder && hasMoreOlder && messages.length > 0 && (
             <p className="text-center text-xs text-wa-muted py-2">Scroll up for older messages</p>
@@ -942,7 +982,7 @@ export default function ChatPage() {
               )}
               <div className={`flex ${isOwn(msg) ? 'justify-end' : ''} ${!isOwn(msg) && !msg.grouped ? 'pl-[42px]' : ''} ${!isOwn(msg) && msg.grouped ? 'pl-[42px]' : ''}`}>
                 <div
-                  className={`relative inline-block max-w-[min(65%,520px)] text-sm leading-relaxed shadow-sm ${
+                  className={`relative inline-block max-w-[min(88%,520px)] sm:max-w-[min(75%,520px)] md:max-w-[min(65%,520px)] text-sm leading-relaxed shadow-sm ${
                     isOwn(msg)
                       ? 'bg-wa-bubble rounded-lg rounded-br-sm pl-3.5 pr-14 py-2'
                       : 'bg-wa-surface rounded-lg rounded-bl-sm pl-3.5 pr-14 py-2'
@@ -1057,7 +1097,7 @@ export default function ChatPage() {
         </div>
 
         {replyingTo && (
-          <div className="flex items-center gap-3 px-5 py-2.5 border-t border-wa-border bg-wa-panel">
+          <div className="flex items-center gap-3 px-3 sm:px-5 py-2.5 border-t border-wa-border bg-wa-panel">
             <div className="flex-1 min-w-0 border-l-[3px] border-wa-accent pl-2.5">
               <span className="block text-xs font-semibold text-wa-accent-hover">Replying to @{replyingTo.username}</span>
               <span className="block text-sm text-wa-muted truncate">{truncateReply(replyingTo.content, 120)}</span>
@@ -1073,7 +1113,10 @@ export default function ChatPage() {
           </div>
         )}
 
-        <form className="flex items-end gap-2.5 px-5 py-3 border-t border-wa-border bg-wa-panel" onSubmit={handleSend}>
+        <form
+          className="flex items-end gap-2 px-3 sm:px-5 py-2.5 sm:py-3 border-t border-wa-border bg-wa-panel pb-safe"
+          onSubmit={handleSend}
+        >
           <input
             ref={fileInputRef}
             type="file"
@@ -1084,7 +1127,7 @@ export default function ChatPage() {
           <div className="flex-1 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors overflow-visible">
             <button
               type="button"
-              className="w-9 h-9 rounded-lg text-lg hover:bg-wa-panel disabled:opacity-40 shrink-0"
+              className="touch-target w-10 h-10 rounded-lg text-lg hover:bg-wa-panel disabled:opacity-40 shrink-0"
               onClick={() => fileInputRef.current?.click()}
               disabled={!activeRoom || uploading}
               title="Attach file"
@@ -1116,7 +1159,7 @@ export default function ChatPage() {
           </div>
           <button
             type="submit"
-            className="px-4 py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white text-base transition-colors"
+            className="touch-target px-4 py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white text-base transition-colors shrink-0"
             disabled={!input.trim()}
           >
             ➤
