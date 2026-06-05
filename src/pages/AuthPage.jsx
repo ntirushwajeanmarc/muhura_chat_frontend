@@ -29,7 +29,7 @@ export default function AuthPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <div className="brand-icon">📚</div>
+          <img src="/favicon.png" alt="" className="auth-brand-logo" />
           <h1>StudyChat</h1>
           <p>Connect with your classmates</p>
         </div>
