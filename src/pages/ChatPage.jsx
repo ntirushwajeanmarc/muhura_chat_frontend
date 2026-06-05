@@ -256,6 +256,7 @@ export default function ChatPage() {
     setUnread((prev) => ({ ...prev, [activeRoom.id]: 0 }));
     loadInitialMessages(activeRoom.id);
     setTypingUsers([]);
+    setOnlineUsers([]);
     setReplyingTo(null);
     setPendingUpload((prev) => {
       if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
@@ -321,8 +322,13 @@ export default function ChatPage() {
       if (roomId) joinRoom(roomId);
       refreshChats();
     });
-    const offOnline = on('online_users', (users) => setOnlineUsers(users));
-    const offTyping = on('user_typing', ({ username, isTyping }) => {
+    const offOnline = on('online_users', ({ roomId, users }) => {
+      if (roomId !== activeRoomIdRef.current) return;
+      setOnlineUsers(users || []);
+    });
+    const offTyping = on('user_typing', ({ username, isTyping, roomId }) => {
+      if (roomId !== activeRoomIdRef.current) return;
+      if (username === userRef.current?.username) return;
       setTypingUsers((prev) =>
         isTyping ? [...new Set([...prev, username])] : prev.filter((u) => u !== username)
       );

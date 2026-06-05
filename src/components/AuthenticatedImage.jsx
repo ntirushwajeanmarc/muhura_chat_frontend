@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { secureFileUrl } from '../utils/assetUrl';
+import { fetchAuthenticatedBlob } from '../utils/fileDownload';
 
 export default function AuthenticatedImage({ storedPath, alt, className, style, fallback }) {
   const [blobUrl, setBlobUrl] = useState(null);
@@ -9,17 +8,21 @@ export default function AuthenticatedImage({ storedPath, alt, className, style, 
   useEffect(() => {
     if (!storedPath) return undefined;
     let objectUrl = null;
+    let cancelled = false;
 
-    axios
-      .get(secureFileUrl(storedPath), { responseType: 'blob' })
-      .then((res) => {
-        objectUrl = URL.createObjectURL(res.data);
+    fetchAuthenticatedBlob(storedPath)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
         setBlobUrl(objectUrl);
         setError(false);
       })
-      .catch(() => setError(true));
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
 
     return () => {
+      cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [storedPath]);
