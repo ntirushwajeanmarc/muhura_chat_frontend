@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchProfile, updateProfile, uploadAvatar, removeAvatar, AVATAR_COLORS } from '../api/profile';
+import { clearImageCache } from '../utils/fileDownload';
 import Avatar from './Avatar';
 import CircularProgress from './CircularProgress';
 import {
@@ -54,6 +55,10 @@ export default function SettingsModal({ onClose }) {
 
   const applySession = (data) => {
     if (data?.user) {
+      if (data.user.avatar_url) clearImageCache(data.user.avatar_url);
+      if (user?.avatar_url && user.avatar_url !== data.user.avatar_url) {
+        clearImageCache(user.avatar_url);
+      }
       updateSession(data.user, data.token);
       setForm((prev) => ({
         ...prev,

@@ -4,6 +4,10 @@ import { imageMimeFromPath, isImagePath } from './imageAttachment';
 
 const imageBlobCache = new Map();
 
+export function clearImageCache(storedPath) {
+  if (storedPath) imageBlobCache.delete(storedPath);
+}
+
 export function getAuthHeaders() {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -32,7 +36,11 @@ function normalizeImageBlob(blob, storedPath) {
 export async function fetchAuthenticatedBlob(storedPath, { download = false, skipCache = false } = {}) {
   if (!storedPath) throw new Error('Missing file path');
 
-  if (!download && !skipCache && imageBlobCache.has(storedPath)) {
+  const isCacheableImage = !download && (
+    isImagePath(storedPath) || storedPath.startsWith('/avatars/user/')
+  );
+
+  if (!skipCache && isCacheableImage && imageBlobCache.has(storedPath)) {
     return imageBlobCache.get(storedPath);
   }
 
@@ -48,7 +56,7 @@ export async function fetchAuthenticatedBlob(storedPath, { download = false, ski
     }
 
     let blob = res.data;
-    if (!download && isImagePath(storedPath)) {
+    if (isCacheableImage) {
       blob = normalizeImageBlob(blob, storedPath);
       imageBlobCache.set(storedPath, blob);
     }

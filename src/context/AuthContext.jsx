@@ -15,12 +15,34 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      const stored = localStorage.getItem('user');
-      if (stored) setUser(JSON.parse(stored));
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${BACKEND_URL}/api/profile/me`);
+        if (cancelled) return;
+        const profile = res.data;
+        localStorage.setItem('user', JSON.stringify(profile));
+        setUser(profile);
+      } catch {
+        if (cancelled) return;
+        const stored = localStorage.getItem('user');
+        if (stored) setUser(JSON.parse(stored));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const login = async (email, password) => {

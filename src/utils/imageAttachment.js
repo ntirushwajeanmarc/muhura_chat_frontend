@@ -1,5 +1,8 @@
 export function isImagePath(path) {
-  return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(path || '');
+  const p = path || '';
+  if (p.startsWith('/avatars/user/')) return true;
+  if (p.startsWith('/attachments/db/')) return false;
+  return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(p);
 }
 
 export function isImageAttachment(attachment) {
