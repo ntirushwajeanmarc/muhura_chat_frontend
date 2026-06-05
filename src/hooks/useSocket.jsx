@@ -1,40 +1,65 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config';
 
 let socketInstance = null;
+const joinedRooms = new Set();
 
 export const useSocket = (token) => {
   const socketRef = useRef(null);
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setConnected(false);
+      return undefined;
+    }
 
     if (socketInstance) {
       socketInstance.disconnect();
       socketInstance = null;
     }
 
-    socketInstance = io(SOCKET_URL, {
+    const socket = io(SOCKET_URL, {
       auth: { token },
       path: '/socket.io',
     });
 
-    socketRef.current = socketInstance;
+    socketInstance = socket;
+    socketRef.current = socket;
+
+    const onConnect = () => {
+      setConnected(true);
+      joinedRooms.forEach((roomId) => socket.emit('join_room', roomId));
+    };
+
+    const onDisconnect = () => setConnected(false);
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    if (socket.connected) onConnect();
 
     return () => {
-      socketInstance?.disconnect();
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.disconnect();
       socketInstance = null;
       socketRef.current = null;
+      setConnected(false);
     };
   }, [token]);
 
   const joinRoom = useCallback((roomId) => {
-    if (roomId) socketRef.current?.emit('join_room', roomId);
+    if (!roomId) return;
+    joinedRooms.add(roomId);
+    socketRef.current?.emit('join_room', roomId);
   }, []);
 
   const joinRooms = useCallback((roomIds) => {
-    roomIds.filter(Boolean).forEach((id) => socketRef.current?.emit('join_room', id));
+    roomIds.filter(Boolean).forEach((id) => {
+      joinedRooms.add(id);
+      socketRef.current?.emit('join_room', id);
+    });
   }, []);
 
   const setPresenceRoom = useCallback((roomId) => {
@@ -50,9 +75,20 @@ export const useSocket = (token) => {
   }, []);
 
   const on = useCallback((event, handler) => {
-    socketRef.current?.on(event, handler);
-    return () => socketRef.current?.off(event, handler);
+    const socket = socketRef.current;
+    if (!socket) return () => {};
+    socket.on(event, handler);
+    return () => socket.off(event, handler);
   }, []);
 
-  return { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, on, socket: socketRef.current };
+  return {
+    joinRoom,
+    joinRooms,
+    setPresenceRoom,
+    sendMessage,
+    sendTyping,
+    on,
+    connected,
+    socket: socketRef.current,
+  };
 };

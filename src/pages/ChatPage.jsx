@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
@@ -38,7 +38,7 @@ function roomPrefix(room) {
 
 export default function ChatPage() {
   const { user, token, logout } = useAuth();
-  const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, on } = useSocket(token);
+  const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, on, connected } = useSocket(token);
   const [publicRooms, setPublicRooms] = useState([]);
   const [directChats, setDirectChats] = useState([]);
   const [groupChats, setGroupChats] = useState([]);
@@ -56,7 +56,9 @@ export default function ChatPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
+  const unreadStorageKey = user?.id ? `studychat_unread_${user.id}` : null;
   const [unread, setUnread] = useState({});
+  const unreadLoadedRef = useRef(false);
   const messagesAreaRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -80,7 +82,50 @@ export default function ChatPage() {
     requestNotificationPermission();
   }, []);
 
+  useEffect(() => {
+    if (!user?.id || unreadLoadedRef.current) return;
+    unreadLoadedRef.current = true;
+    try {
+      const saved = sessionStorage.getItem(`studychat_unread_${user.id}`);
+      if (saved) setUnread(JSON.parse(saved));
+    } catch {
+      /* ignore */
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!unreadStorageKey) return;
+    sessionStorage.setItem(unreadStorageKey, JSON.stringify(unread));
+  }, [unread, unreadStorageKey]);
+
   const totalUnread = Object.values(unread).reduce((sum, n) => sum + n, 0);
+
+  const sortByUnreadThenRecent = useCallback((rooms) => {
+    return [...rooms].sort((a, b) => {
+      const unreadDiff = (unread[b.id] || 0) - (unread[a.id] || 0);
+      if (unreadDiff !== 0) return unreadDiff;
+      const ta = a.last_message_at || a.created_at;
+      const tb = b.last_message_at || b.created_at;
+      return new Date(tb) - new Date(ta);
+    });
+  }, [unread]);
+
+  const sortedDirectChats = useMemo(
+    () => sortByUnreadThenRecent(directChats),
+    [directChats, sortByUnreadThenRecent]
+  );
+  const sortedGroupChats = useMemo(
+    () => sortByUnreadThenRecent(groupChats),
+    [groupChats, sortByUnreadThenRecent]
+  );
+  const sortedPublicRooms = useMemo(
+    () => sortByUnreadThenRecent(publicRooms),
+    [publicRooms, sortByUnreadThenRecent]
+  );
+  const sidebarRooms = useMemo(
+    () => sortByUnreadThenRecent([...directChats, ...groupChats, ...publicRooms]),
+    [directChats, groupChats, publicRooms, sortByUnreadThenRecent]
+  );
 
   useEffect(() => {
     document.title = totalUnread > 0 ? `(${totalUnread}) StudyChat` : 'StudyChat';
@@ -160,8 +205,9 @@ export default function ChatPage() {
     const { direct, groups } = await fetchChats();
     setDirectChats(direct);
     setGroupChats(groups);
+    joinRooms([...direct, ...groups].map((r) => r.id));
     return { direct, groups };
-  }, []);
+  }, [joinRooms]);
 
   const dedupeRooms = useCallback((list) => {
     const byName = new Map();
@@ -231,8 +277,10 @@ export default function ChatPage() {
   }, [isNearBottom, activeRoom?.id, loadOlderMessages]);
 
   useEffect(() => {
+    if (!connected) return undefined;
+
     const offMsg = on('new_message', (msg) => {
-      const isActiveRoom = !msg.room_id || msg.room_id === activeRoomIdRef.current;
+      const isActiveRoom = msg.room_id === activeRoomIdRef.current;
       const isOwn = msg.username === userRef.current?.username;
 
       if (!isOwn && msg.room_id) {
@@ -269,14 +317,23 @@ export default function ChatPage() {
 
       refreshChats();
     });
+    const offRoom = on('room_added', ({ roomId }) => {
+      if (roomId) joinRoom(roomId);
+      refreshChats();
+    });
     const offOnline = on('online_users', (users) => setOnlineUsers(users));
     const offTyping = on('user_typing', ({ username, isTyping }) => {
       setTypingUsers((prev) =>
         isTyping ? [...new Set([...prev, username])] : prev.filter((u) => u !== username)
       );
     });
-    return () => { offMsg?.(); offOnline?.(); offTyping?.(); };
-  }, [on, refreshChats, openRoomById]);
+    return () => {
+      offMsg?.();
+      offRoom?.();
+      offOnline?.();
+      offTyping?.();
+    };
+  }, [connected, on, refreshChats, openRoomById, joinRoom]);
 
   useEffect(() => {
     if (stickToBottomRef.current) {
@@ -408,17 +465,58 @@ export default function ChatPage() {
     setShowNewGroup(false);
   };
 
-  const renderChatItem = (room) => {
+  const UnreadBadge = ({ count, className = '' }) => {
+    if (!count) return null;
+    return (
+      <span
+        className={`min-w-[20px] h-5 px-1.5 rounded-full bg-wa-accent text-white text-[11px] font-bold flex items-center justify-center shrink-0 ${className}`}
+      >
+        {count > 99 ? '99+' : count}
+      </span>
+    );
+  };
+
+  const renderChatItem = (room, compact = false) => {
     const label = roomLabel(room);
     const prefix = roomPrefix(room);
     const avatarColor = room.type === 'direct' ? room.peer?.avatar_color : null;
     const avatarUrl = room.type === 'direct' ? room.peer?.avatar_url : null;
     const avatarName = room.type === 'direct' ? room.peer?.username : label;
     const unreadCount = unread[room.id] || 0;
+    const hasUnread = unreadCount > 0;
+
+    if (compact) {
+      return (
+        <button
+          key={room.id}
+          type="button"
+          className={`relative mx-auto rounded-full transition-opacity ${
+            activeRoom?.id === room.id ? 'ring-2 ring-wa-accent' : 'hover:opacity-90'
+          }`}
+          onClick={() => selectRoom(room)}
+          title={hasUnread ? `${label} (${unreadCount} unread)` : label}
+        >
+          {room.type === 'direct' ? (
+            <Avatar username={avatarName} color={avatarColor} avatarUrl={avatarUrl} size={36} />
+          ) : (
+            <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center text-base">
+              {prefix || '💬'}
+            </span>
+          )}
+          {hasUnread && (
+            <UnreadBadge
+              count={unreadCount}
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] text-[10px] px-1"
+            />
+          )}
+        </button>
+      );
+    }
 
     return (
       <button
         key={room.id}
+        type="button"
         className={`flex items-center gap-2.5 w-full p-2.5 rounded-lg text-left transition-colors ${
           activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/60'
         }`}
@@ -432,16 +530,16 @@ export default function ChatPage() {
           </span>
         )}
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm truncate text-slate-100">{label}</div>
+          <div className={`text-sm truncate ${hasUnread ? 'font-bold text-slate-50' : 'font-semibold text-slate-100'}`}>
+            {label}
+          </div>
           {room.last_message && (
-            <div className="text-xs text-wa-muted truncate">{truncateReply(room.last_message, 40)}</div>
+            <div className={`text-xs truncate ${hasUnread ? 'font-semibold text-slate-300' : 'text-wa-muted'}`}>
+              {truncateReply(room.last_message, 40)}
+            </div>
           )}
         </div>
-        {unreadCount > 0 && (
-          <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-wa-accent text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
+        <UnreadBadge count={unreadCount} />
       </button>
     );
   };
@@ -528,6 +626,16 @@ export default function ChatPage() {
           </button>
         </div>
 
+        {!sidebarOpen && (
+          <div className="flex-1 overflow-y-auto py-2 flex flex-col gap-2 min-h-0 px-1">
+            {sidebarRooms.length === 0 ? (
+              <p className="text-[10px] text-wa-muted text-center px-1">No chats yet</p>
+            ) : (
+              sidebarRooms.map((room) => renderChatItem(room, true))
+            )}
+          </div>
+        )}
+
         {sidebarOpen && (
           <>
             <div className="p-2 overflow-y-auto max-h-[28vh] shrink-0">
@@ -535,7 +643,7 @@ export default function ChatPage() {
               {directChats.length === 0 && (
                 <p className="text-xs text-wa-muted px-2">Search someone to start chatting</p>
               )}
-              {directChats.map(renderChatItem)}
+              {sortedDirectChats.map((room) => renderChatItem(room))}
             </div>
 
             <div className="p-2 overflow-y-auto max-h-[28vh] shrink-0">
@@ -543,28 +651,28 @@ export default function ChatPage() {
               {groupChats.length === 0 && (
                 <p className="text-xs text-wa-muted px-2">Create a group to chat together</p>
               )}
-              {groupChats.map(renderChatItem)}
+              {sortedGroupChats.map((room) => renderChatItem(room))}
             </div>
 
             <div className="p-2 overflow-y-auto max-h-[22vh] shrink-0">
               <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">CHANNELS</div>
-              {publicRooms.map((room) => {
+              {sortedPublicRooms.map((room) => {
                 const unreadCount = unread[room.id] || 0;
+                const hasUnread = unreadCount > 0;
                 return (
                   <button
                     key={room.id}
+                    type="button"
                     className={`flex items-center gap-2.5 w-full p-2.5 rounded-lg text-left transition-colors ${
                       activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/60'
                     }`}
                     onClick={() => selectRoom(room)}
                   >
                     <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
-                    <span className="font-semibold text-sm truncate flex-1">{room.name}</span>
-                    {unreadCount > 0 && (
-                      <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-wa-accent text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    )}
+                    <span className={`text-sm truncate flex-1 ${hasUnread ? 'font-bold text-slate-50' : 'font-semibold text-slate-100'}`}>
+                      {room.name}
+                    </span>
+                    <UnreadBadge count={unreadCount} />
                   </button>
                 );
               })}
@@ -642,17 +750,6 @@ export default function ChatPage() {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-wa-chat">
         <header className="flex items-center gap-3 px-5 h-[60px] border-b border-wa-border bg-wa-panel shrink-0">
-          {!sidebarOpen && (
-            <button
-              type="button"
-              className="w-9 h-9 rounded-lg text-lg hover:bg-wa-surface flex items-center justify-center shrink-0"
-              onClick={() => setSidebarOpen(true)}
-              title="Open sidebar"
-              aria-label="Open sidebar"
-            >
-              ☰
-            </button>
-          )}
           {headerAvatar}
           <div className="flex items-center gap-1.5 font-semibold text-base">
             {activeRoom?.type === 'public' && <span className="text-wa-muted">#</span>}

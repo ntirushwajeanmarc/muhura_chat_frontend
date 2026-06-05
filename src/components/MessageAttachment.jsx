@@ -1,5 +1,7 @@
 import React from 'react';
-import { BACKEND_URL } from '../config';
+import axios from 'axios';
+import { secureFileUrl } from '../utils/assetUrl';
+import AuthenticatedImage from './AuthenticatedImage';
 
 function fileIcon(mime) {
   if (mime?.startsWith('image/')) return '🖼️';
@@ -11,43 +13,54 @@ function fileIcon(mime) {
   return '📎';
 }
 
+async function downloadFile(storedPath, filename) {
+  const res = await axios.get(secureFileUrl(storedPath), { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'download';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function MessageAttachment({ attachment }) {
   if (!attachment?.url) return null;
 
-  const url = attachment.url.startsWith('http')
-    ? attachment.url
-    : `${BACKEND_URL}${attachment.url}`;
   const isImage = attachment.mime?.startsWith('image/');
 
   if (isImage) {
     return (
       <div className="mb-1.5">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="block">
-          <img
-            src={url}
-            alt={attachment.name || 'Shared image'}
-            loading="lazy"
-            className="max-w-full max-h-72 rounded-md cursor-pointer"
-          />
-        </a>
-        <a
-          href={url}
-          download={attachment.name}
+        <AuthenticatedImage
+          storedPath={attachment.url}
+          alt={attachment.name || 'Shared image'}
+          className="max-w-full max-h-72 rounded-md"
+          fallback={
+            <button
+              type="button"
+              className="text-sm text-wa-accent hover:underline"
+              onClick={() => downloadFile(attachment.url, attachment.name)}
+            >
+              Open image
+            </button>
+          }
+        />
+        <button
+          type="button"
           className="inline-block mt-1 text-xs text-wa-accent hover:underline"
+          onClick={() => downloadFile(attachment.url, attachment.name)}
         >
           Download image
-        </a>
+        </button>
       </div>
     );
   }
 
   return (
-    <a
-      href={url}
-      download={attachment.name}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-2.5 p-2.5 mb-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors no-underline text-slate-100"
+    <button
+      type="button"
+      onClick={() => downloadFile(attachment.url, attachment.name)}
+      className="flex items-center gap-2.5 p-2.5 mb-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors text-slate-100 w-full text-left"
     >
       <span className="text-2xl shrink-0">{fileIcon(attachment.mime)}</span>
       <span className="min-w-0 flex-1">
@@ -55,6 +68,6 @@ export default function MessageAttachment({ attachment }) {
         <span className="block text-xs text-wa-muted">Tap to download</span>
       </span>
       <span className="text-wa-accent text-sm shrink-0">⬇</span>
-    </a>
+    </button>
   );
 }
