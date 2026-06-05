@@ -18,6 +18,8 @@ import ReplyButton, { truncateReply } from '../components/ReplyButton';
 import UserSearchModal from '../components/UserSearchModal';
 import CreateGroupModal from '../components/CreateGroupModal';
 import SettingsModal from '../components/SettingsModal';
+import ProfileModal from '../components/ProfileModal';
+import MessageLikeButton from '../components/MessageLikeButton';
 import Avatar from '../components/Avatar';
 import {
   showMessageNotification,
@@ -62,6 +64,7 @@ export default function ChatPage() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [profileUserId, setProfileUserId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
   const unreadStorageKey = user?.id ? `studychat_unread_${user.id}` : null;
@@ -372,6 +375,21 @@ export default function ChatPage() {
       setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
       refreshChats();
     });
+    const offLike = on('message_like_updated', (payload) => {
+      if (payload.room_id !== activeRoomIdRef.current) return;
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== payload.message_id) return m;
+          const likedByMe = payload.user_id === userRef.current?.id
+            ? payload.liked
+            : (m.likes?.liked_by_me || false);
+          return {
+            ...m,
+            likes: { count: payload.like_count, liked_by_me: likedByMe },
+          };
+        })
+      );
+    });
     const offRead = on('read_receipt', (receipt) => {
       if (!receipt?.room_id || !receipt?.user_id) return;
       setRoomReads((prev) => ({
@@ -391,6 +409,7 @@ export default function ChatPage() {
       offOnline?.();
       offTyping?.();
       offEdited?.();
+      offLike?.();
       offRead?.();
     };
   }, [connected, on, refreshChats, openRoomById, joinRoom]);
@@ -654,6 +673,16 @@ export default function ChatPage() {
 
   const isOwn = (msg) => msg.username === user?.username;
 
+  const updateMessageLikes = (messageId, likes) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, likes } : m))
+    );
+  };
+
+  const openProfile = (targetUserId) => {
+    if (targetUserId) setProfileUserId(targetUserId);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       {showNewChat && (
@@ -663,6 +692,13 @@ export default function ChatPage() {
         <CreateGroupModal onCreate={handleCreateGroup} onClose={() => setShowNewGroup(false)} />
       )}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {profileUserId && (
+        <ProfileModal
+          userId={profileUserId}
+          onClose={() => setProfileUserId(null)}
+          onEditProfile={() => setShowSettings(true)}
+        />
+      )}
 
       <aside
         className={`flex flex-col bg-wa-dark border-r border-wa-border transition-all duration-200 ${
@@ -798,21 +834,28 @@ export default function ChatPage() {
           <button
             type="button"
             className="shrink-0 rounded-full hover:opacity-90"
-            onClick={() => setShowSettings(true)}
-            title="Settings"
+            onClick={() => openProfile(user?.id)}
+            title="My profile"
           >
             <Avatar username={user?.username} color={user?.avatar_color} avatarUrl={user?.avatar_url} size={32} />
           </button>
           {sidebarOpen ? (
             <>
-              <span className="text-sm font-semibold flex-1 truncate">{user?.username}</span>
+              <button
+                type="button"
+                className="text-sm font-semibold flex-1 truncate text-left hover:text-wa-accent"
+                onClick={() => setShowSettings(true)}
+                title="Edit profile"
+              >
+                {user?.username}
+              </button>
               <button
                 type="button"
                 className="w-8 h-8 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
                 onClick={() => setShowSettings(true)}
-                title="Settings"
+                title="Edit profile"
               >
-                ⚙
+                ✏️
               </button>
               <button
                 type="button"
@@ -829,9 +872,9 @@ export default function ChatPage() {
                 type="button"
                 className="w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
                 onClick={() => setShowSettings(true)}
-                title="Settings"
+                title="Edit profile"
               >
-                ⚙
+                ✏️
               </button>
               <button
                 type="button"
@@ -848,7 +891,16 @@ export default function ChatPage() {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-wa-chat">
         <header className="flex items-center gap-3 px-5 h-[60px] border-b border-wa-border bg-wa-panel shrink-0">
-          {headerAvatar}
+          {headerAvatar && (
+            <button
+              type="button"
+              className="shrink-0 rounded-full hover:opacity-90"
+              onClick={() => openProfile(activeRoom.peer?.id)}
+              title="View profile"
+            >
+              {headerAvatar}
+            </button>
+          )}
           <div className="flex items-center gap-1.5 font-semibold text-base">
             {activeRoom?.type === 'public' && <span className="text-wa-muted">#</span>}
             {activeRoom?.type === 'group' && <span>👥</span>}
@@ -876,7 +928,14 @@ export default function ChatPage() {
             <div key={msg.id} className={`py-0.5 ${!msg.grouped ? 'mt-3' : ''}`}>
               {!msg.grouped && !isOwn(msg) && (
                 <div className="flex items-center gap-2.5 mb-1">
-                  <Avatar username={msg.username} color={msg.avatar_color} avatarUrl={msg.avatar_url} size={32} />
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-full hover:opacity-90"
+                    onClick={() => openProfile(msg.user_id)}
+                    title="View profile"
+                  >
+                    <Avatar username={msg.username} color={msg.avatar_color} avatarUrl={msg.avatar_url} size={32} />
+                  </button>
                   <span className="font-semibold text-sm">{msg.username}</span>
                   <span className="text-[11px] text-wa-muted">{formatTime(msg.created_at)}</span>
                 </div>
@@ -936,6 +995,15 @@ export default function ChatPage() {
                     </div>
                   ) : (
                     msg.content && <MessageContent content={msg.content} />
+                  )}
+                  {editingMessageId !== msg.id && (
+                    <div className={`mt-1 ${isOwn(msg) ? 'flex justify-end' : ''}`}>
+                      <MessageLikeButton
+                        messageId={msg.id}
+                        likes={msg.likes || { count: 0, liked_by_me: false }}
+                        onUpdate={(likes) => updateMessageLikes(msg.id, likes)}
+                      />
+                    </div>
                   )}
                   {isOwn(msg) && editingMessageId !== msg.id && (
                     <span className="flex items-center justify-end gap-1 mt-1 clear-both">

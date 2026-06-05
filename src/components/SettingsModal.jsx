@@ -24,6 +24,7 @@ export default function SettingsModal({ onClose }) {
   });
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
+  const [likeCount, setLikeCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -48,6 +49,7 @@ export default function SettingsModal({ onClose }) {
         });
         setEmail(profile.email);
         setUsername(profile.username);
+        setLikeCount(profile.like_count || 0);
       })
       .catch(() => setError('Could not load profile'))
       .finally(() => setLoading(false));
@@ -75,12 +77,14 @@ export default function SettingsModal({ onClose }) {
     setSuccess('');
     try {
       const data = await updateProfile({
+        username: username.trim(),
         surname: form.surname,
         phone: form.phone,
         bio: form.bio,
         avatar_color: form.avatar_color,
       });
       applySession(data);
+      if (data.user?.username) setUsername(data.user.username);
       setSuccess('Profile saved');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save');
@@ -129,7 +133,7 @@ export default function SettingsModal({ onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border shrink-0">
-          <h2 className="text-lg font-semibold">Settings</h2>
+          <h2 className="text-lg font-semibold">Edit profile</h2>
           <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -183,9 +187,24 @@ export default function SettingsModal({ onClose }) {
                 </div>
               </div>
 
+              <div className="text-center py-1">
+                <span className="text-sm text-wa-muted">
+                  <span className="text-pink-400 font-bold text-lg">{likeCount}</span>
+                  {' '}profile {likeCount === 1 ? 'like' : 'likes'}
+                </span>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-wa-muted mb-1.5">Username</label>
-                <input type="text" className={`${inputClass} opacity-70`} value={username} readOnly />
+                <input
+                  type="text"
+                  className={inputClass}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="letters, numbers, underscore"
+                  minLength={3}
+                  maxLength={50}
+                />
               </div>
 
               <div>

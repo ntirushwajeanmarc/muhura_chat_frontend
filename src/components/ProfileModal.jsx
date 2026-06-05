@@ -1,0 +1,120 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { fetchUserProfile, toggleProfileLike } from '../api/likes';
+import Avatar from './Avatar';
+
+export default function ProfileModal({ userId, onClose, onEditProfile }) {
+  const { user } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [liking, setLiking] = useState(false);
+  const [error, setError] = useState('');
+
+  const isOwn = user?.id === userId;
+
+  useEffect(() => {
+    if (!userId) return;
+    setLoading(true);
+    fetchUserProfile(userId)
+      .then((data) => setProfile(data.user))
+      .catch(() => setError('Could not load profile'))
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  const handleLike = async () => {
+    if (isOwn || liking) return;
+    setLiking(true);
+    try {
+      const data = await toggleProfileLike(userId);
+      setProfile((prev) => ({
+        ...prev,
+        like_count: data.like_count,
+        liked_by_me: data.liked,
+      }));
+    } catch {
+      setError('Could not update like');
+    } finally {
+      setLiking(false);
+    }
+  };
+
+  const displayName = profile?.surname
+    ? `${profile.username} ${profile.surname}`
+    : profile?.username;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5" onClick={onClose}>
+      <div
+        className="bg-wa-panel border border-wa-border rounded-xl w-full max-w-sm shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border">
+          <h2 className="text-lg font-semibold">Profile</h2>
+          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <div className="p-5 flex flex-col items-center gap-4">
+          {loading ? (
+            <p className="text-wa-muted py-8">Loading…</p>
+          ) : error ? (
+            <p className="text-red-400 py-4">{error}</p>
+          ) : profile ? (
+            <>
+              <Avatar
+                username={profile.username}
+                color={profile.avatar_color}
+                avatarUrl={profile.avatar_url}
+                size={96}
+              />
+              <div className="text-center">
+                <h3 className="text-xl font-bold">{displayName}</h3>
+                {profile.surname && (
+                  <p className="text-sm text-wa-muted">@{profile.username}</p>
+                )}
+              </div>
+              {profile.bio && (
+                <p className="text-sm text-slate-300 text-center whitespace-pre-wrap">{profile.bio}</p>
+              )}
+              {profile.phone && (
+                <p className="text-sm text-wa-muted">📱 {profile.phone}</p>
+              )}
+              <div className="flex items-center gap-3 pt-2">
+                <span className="text-sm text-wa-muted">
+                  <span className="font-semibold text-pink-400">{profile.like_count || 0}</span>
+                  {' '}profile {profile.like_count === 1 ? 'like' : 'likes'}
+                </span>
+              </div>
+              {isOwn ? (
+                <button
+                  type="button"
+                  className="w-full py-2.5 bg-wa-accent hover:bg-wa-accent-hover rounded-lg text-white text-sm font-semibold"
+                  onClick={() => {
+                    onClose();
+                    onEditProfile?.();
+                  }}
+                >
+                  Edit profile
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                    profile.liked_by_me
+                      ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 hover:bg-pink-500/30'
+                      : 'bg-wa-accent hover:bg-wa-accent-hover text-white'
+                  }`}
+                  onClick={handleLike}
+                  disabled={liking}
+                >
+                  {liking ? '…' : profile.liked_by_me ? '❤️ Liked' : '🤍 Like profile'}
+                </button>
+              )}
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -11,6 +11,7 @@ export async function updateProfile(data) {
   return res.data;
 }
 
+
 export async function uploadAvatar(file, onProgress) {
   const form = new FormData();
   form.append('photo', file);
