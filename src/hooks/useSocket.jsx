@@ -30,7 +30,15 @@ export const useSocket = (token) => {
   }, [token]);
 
   const joinRoom = useCallback((roomId) => {
-    socketRef.current?.emit('join_room', roomId);
+    if (roomId) socketRef.current?.emit('join_room', roomId);
+  }, []);
+
+  const joinRooms = useCallback((roomIds) => {
+    roomIds.filter(Boolean).forEach((id) => socketRef.current?.emit('join_room', id));
+  }, []);
+
+  const setPresenceRoom = useCallback((roomId) => {
+    if (roomId) socketRef.current?.emit('presence_room', roomId);
   }, []);
 
   const sendMessage = useCallback((roomId, content, replyToId = null) => {
@@ -46,5 +54,5 @@ export const useSocket = (token) => {
     return () => socketRef.current?.off(event, handler);
   }, []);
 
-  return { joinRoom, sendMessage, sendTyping, on, socket: socketRef.current };
+  return { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, on, socket: socketRef.current };
 };

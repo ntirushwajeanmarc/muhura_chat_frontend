@@ -3,6 +3,11 @@ import { useAuth } from '../context/AuthContext';
 import { fetchProfile, updateProfile, uploadAvatar, removeAvatar, AVATAR_COLORS } from '../api/profile';
 import Avatar from './Avatar';
 import CircularProgress from './CircularProgress';
+import {
+  getNotificationPrefs,
+  setNotificationPrefs,
+  requestNotificationPermission,
+} from '../utils/notifications';
 
 const inputClass =
   'w-full px-3.5 py-2.5 bg-wa-surface border border-wa-border rounded-lg text-slate-100 text-sm outline-none focus:border-wa-accent';
@@ -24,6 +29,10 @@ export default function SettingsModal({ onClose }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [notifPrefs, setNotifPrefs] = useState(getNotificationPrefs());
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -212,6 +221,57 @@ export default function SettingsModal({ onClose }) {
                   onChange={(e) => setForm({ ...form, bio: e.target.value })}
                 />
                 <p className="text-xs text-wa-muted mt-1 text-right">{form.bio.length}/200</p>
+              </div>
+
+              <div className="border-t border-wa-border pt-4">
+                <label className="block text-xs font-medium text-wa-muted mb-3">Notifications</label>
+                <div className="flex flex-col gap-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-wa-accent"
+                      checked={notifPrefs.enabled}
+                      onChange={(e) => {
+                        const next = { ...notifPrefs, enabled: e.target.checked };
+                        setNotifPrefs(next);
+                        setNotificationPrefs(next);
+                      }}
+                    />
+                    <span className="text-sm">Message alerts &amp; sounds</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-wa-accent"
+                      checked={notifPrefs.sound}
+                      onChange={(e) => {
+                        const next = { ...notifPrefs, sound: e.target.checked };
+                        setNotifPrefs(next);
+                        setNotificationPrefs(next);
+                      }}
+                    />
+                    <span className="text-sm">Notification sound</span>
+                  </label>
+                  {notifPermission !== 'granted' && (
+                    <button
+                      type="button"
+                      className="text-sm text-left text-wa-accent hover:underline"
+                      onClick={async () => {
+                        const result = await requestNotificationPermission();
+                        setNotifPermission(result);
+                        if (result === 'granted') setSuccess('Browser notifications enabled');
+                        else if (result === 'denied') setError('Notifications blocked — enable them in browser settings');
+                      }}
+                    >
+                      {notifPermission === 'denied'
+                        ? 'Notifications blocked by browser'
+                        : 'Enable browser notifications (like WhatsApp)'}
+                    </button>
+                  )}
+                  {notifPermission === 'granted' && (
+                    <p className="text-xs text-green-400">Browser notifications are on</p>
+                  )}
+                </div>
               </div>
 
               <div>

@@ -16,6 +16,12 @@ import UserSearchModal from '../components/UserSearchModal';
 import CreateGroupModal from '../components/CreateGroupModal';
 import SettingsModal from '../components/SettingsModal';
 import Avatar from '../components/Avatar';
+import {
+  showMessageNotification,
+  messagePreview,
+  requestNotificationPermission,
+  getNotificationPrefs,
+} from '../utils/notifications';
 
 function roomLabel(room) {
   if (!room) return '';
@@ -32,7 +38,7 @@ function roomPrefix(room) {
 
 export default function ChatPage() {
   const { user, token, logout } = useAuth();
-  const { joinRoom, sendMessage, sendTyping, on } = useSocket(token);
+  const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, on } = useSocket(token);
   const [publicRooms, setPublicRooms] = useState([]);
   const [directChats, setDirectChats] = useState([]);
   const [groupChats, setGroupChats] = useState([]);
@@ -50,6 +56,7 @@ export default function ChatPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
+  const [unread, setUnread] = useState({});
   const messagesAreaRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -58,6 +65,38 @@ export default function ChatPage() {
   const stickToBottomRef = useRef(true);
   const loadingOlderRef = useRef(false);
   const activeRoomIdRef = useRef(null);
+  const userRef = useRef(user);
+  const allRoomsRef = useRef([]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    allRoomsRef.current = [...directChats, ...groupChats, ...publicRooms];
+  }, [directChats, groupChats, publicRooms]);
+
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
+
+  const totalUnread = Object.values(unread).reduce((sum, n) => sum + n, 0);
+
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) StudyChat` : 'StudyChat';
+  }, [totalUnread]);
+
+  const findRoomById = useCallback((roomId) => {
+    return allRoomsRef.current.find((r) => r.id === roomId);
+  }, []);
+
+  const openRoomById = useCallback((roomId) => {
+    const room = findRoomById(roomId);
+    if (room) {
+      setActiveRoom(room);
+      setUnread((prev) => ({ ...prev, [roomId]: 0 }));
+    }
+  }, [findRoomById]);
 
   const SCROLL_THRESHOLD = 80;
   const LOAD_OLDER_THRESHOLD = 120;
@@ -146,13 +185,16 @@ export default function ChatPage() {
       setPublicRooms(unique);
       setDirectChats(chats.direct);
       setGroupChats(chats.groups);
+      const allRooms = [...chats.direct, ...chats.groups, ...unique];
+      joinRooms(allRooms.map((r) => r.id));
+
       if (chats.direct.length > 0) {
         setActiveRoom(chats.direct[0]);
       } else if (unique.length > 0) {
         setActiveRoom(unique[0]);
       }
     });
-  }, [dedupeRooms]);
+  }, [dedupeRooms, joinRooms]);
 
   useEffect(() => {
     activeRoomIdRef.current = activeRoom?.id ?? null;
@@ -164,6 +206,8 @@ export default function ChatPage() {
     setMessages([]);
     setHasMoreOlder(false);
     joinRoom(activeRoom.id);
+    setPresenceRoom(activeRoom.id);
+    setUnread((prev) => ({ ...prev, [activeRoom.id]: 0 }));
     loadInitialMessages(activeRoom.id);
     setTypingUsers([]);
     setReplyingTo(null);
@@ -171,7 +215,7 @@ export default function ChatPage() {
       if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
       return null;
     });
-  }, [activeRoom, joinRoom, loadInitialMessages]);
+  }, [activeRoom, joinRoom, setPresenceRoom, loadInitialMessages]);
 
   useEffect(() => {
     const el = messagesAreaRef.current;
@@ -188,14 +232,41 @@ export default function ChatPage() {
 
   useEffect(() => {
     const offMsg = on('new_message', (msg) => {
-      if (msg.room_id && msg.room_id !== activeRoomIdRef.current) {
-        refreshChats();
-        return;
+      const isActiveRoom = !msg.room_id || msg.room_id === activeRoomIdRef.current;
+      const isOwn = msg.username === userRef.current?.username;
+
+      if (!isOwn && msg.room_id) {
+        const tabHidden = document.hidden;
+        const prefs = getNotificationPrefs();
+        const shouldNotify = prefs.enabled && (!isActiveRoom || tabHidden);
+
+        if (shouldNotify) {
+          const room = allRoomsRef.current.find((r) => r.id === msg.room_id);
+          const chatName = room ? roomLabel(room) : msg.username;
+          const notifyTitle = room?.type === 'direct' ? msg.username : `${msg.username} in ${chatName}`;
+          showMessageNotification({
+            title: notifyTitle,
+            body: messagePreview(msg),
+            roomId: msg.room_id,
+            onClick: () => openRoomById(msg.room_id),
+          });
+        }
+
+        if (!isActiveRoom) {
+          setUnread((prev) => ({
+            ...prev,
+            [msg.room_id]: (prev[msg.room_id] || 0) + 1,
+          }));
+        }
       }
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
+
+      if (isActiveRoom) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+
       refreshChats();
     });
     const offOnline = on('online_users', (users) => setOnlineUsers(users));
@@ -205,7 +276,7 @@ export default function ChatPage() {
       );
     });
     return () => { offMsg?.(); offOnline?.(); offTyping?.(); };
-  }, [on, refreshChats]);
+  }, [on, refreshChats, openRoomById]);
 
   useEffect(() => {
     if (stickToBottomRef.current) {
@@ -308,7 +379,10 @@ export default function ChatPage() {
     return grouped;
   };
 
-  const selectRoom = (room) => setActiveRoom(room);
+  const selectRoom = (room) => {
+    setActiveRoom(room);
+    setUnread((prev) => ({ ...prev, [room.id]: 0 }));
+  };
 
   const handleStartDirect = async (targetUser) => {
     const room = await startDirectChat(targetUser.id);
@@ -321,6 +395,7 @@ export default function ChatPage() {
       }
       return [chatRoom, ...prev];
     });
+    joinRoom(chatRoom.id);
     setActiveRoom(chatRoom);
     setShowNewChat(false);
   };
@@ -328,6 +403,7 @@ export default function ChatPage() {
   const handleCreateGroup = async (name, memberIds) => {
     const room = await createGroupChat(name, memberIds);
     setGroupChats((prev) => [room, ...prev]);
+    joinRoom(room.id);
     setActiveRoom(room);
     setShowNewGroup(false);
   };
@@ -338,6 +414,7 @@ export default function ChatPage() {
     const avatarColor = room.type === 'direct' ? room.peer?.avatar_color : null;
     const avatarUrl = room.type === 'direct' ? room.peer?.avatar_url : null;
     const avatarName = room.type === 'direct' ? room.peer?.username : label;
+    const unreadCount = unread[room.id] || 0;
 
     return (
       <button
@@ -360,6 +437,11 @@ export default function ChatPage() {
             <div className="text-xs text-wa-muted truncate">{truncateReply(room.last_message, 40)}</div>
           )}
         </div>
+        {unreadCount > 0 && (
+          <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-wa-accent text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
       </button>
     );
   };
@@ -466,18 +548,26 @@ export default function ChatPage() {
 
             <div className="p-2 overflow-y-auto max-h-[22vh] shrink-0">
               <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">CHANNELS</div>
-              {publicRooms.map((room) => (
-                <button
-                  key={room.id}
-                  className={`flex items-center gap-2.5 w-full p-2.5 rounded-lg text-left transition-colors ${
-                    activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/60'
-                  }`}
-                  onClick={() => selectRoom(room)}
-                >
-                  <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
-                  <span className="font-semibold text-sm truncate">{room.name}</span>
-                </button>
-              ))}
+              {publicRooms.map((room) => {
+                const unreadCount = unread[room.id] || 0;
+                return (
+                  <button
+                    key={room.id}
+                    className={`flex items-center gap-2.5 w-full p-2.5 rounded-lg text-left transition-colors ${
+                      activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/60'
+                    }`}
+                    onClick={() => selectRoom(room)}
+                  >
+                    <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
+                    <span className="font-semibold text-sm truncate flex-1">{room.name}</span>
+                    {unreadCount > 0 && (
+                      <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-wa-accent text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex-1 p-2 overflow-y-auto min-h-[60px]">
