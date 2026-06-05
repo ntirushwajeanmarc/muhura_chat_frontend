@@ -1,6 +1,9 @@
 import React from 'react';
 
-export default function ReplyButton({ onClick, className = 'msg-reply-btn', title = 'Reply' }) {
+const btnClass =
+  'flex items-center justify-center w-6 h-6 rounded-md text-wa-muted hover:text-slate-200 hover:bg-white/10 transition-colors';
+
+export default function ReplyButton({ onClick, className = btnClass, title = 'Reply' }) {
   return (
     <button
       type="button"

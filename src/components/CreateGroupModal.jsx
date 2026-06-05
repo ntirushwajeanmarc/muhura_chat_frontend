@@ -1,19 +1,9 @@
 import React, { useState } from 'react';
 import UserSearchModal from './UserSearchModal';
+import Avatar from './Avatar';
 
-const Avatar = ({ username, color, size = 28 }) => (
-  <div
-    className="user-avatar"
-    style={{
-      width: size,
-      height: size,
-      background: color || '#25d366',
-      fontSize: size * 0.4,
-    }}
-  >
-    {username?.[0]?.toUpperCase()}
-  </div>
-);
+const inputClass =
+  'w-full px-3.5 py-2.5 bg-wa-surface border border-wa-border rounded-lg text-slate-100 text-sm outline-none focus:border-wa-accent';
 
 export default function CreateGroupModal({ onCreate, onClose }) {
   const [name, setName] = useState('');
@@ -57,21 +47,25 @@ export default function CreateGroupModal({ onCreate, onClose }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>New group</h2>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5" onClick={onClose}>
+      <div
+        className="bg-wa-panel border border-wa-border rounded-xl w-full max-w-md shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border">
+          <h2 className="text-lg font-semibold">New group</h2>
+          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
 
-        <form onSubmit={handleCreate} className="group-form">
-          <div className="field">
-            <label>Group name</label>
+        <form onSubmit={handleCreate} className="p-4 flex flex-col gap-4">
+          <div>
+            <label className="block text-xs font-medium text-wa-muted mb-1.5">Group name</label>
             <input
               type="text"
               placeholder="e.g. Study group"
+              className={inputClass}
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -79,34 +73,34 @@ export default function CreateGroupModal({ onCreate, onClose }) {
             />
           </div>
 
-          <div className="group-members-section">
-            <div className="group-members-header">
+          <div>
+            <div className="flex items-center justify-between text-sm text-wa-muted mb-2">
               <span>Members ({members.length + 1})</span>
-              <button
-                type="button"
-                className="group-add-btn"
-                onClick={() => setShowSearch(true)}
-              >
+              <button type="button" className="text-wa-accent font-semibold text-sm" onClick={() => setShowSearch(true)}>
                 + Add
               </button>
             </div>
-            <div className="group-members-list">
+            <div className="flex flex-wrap gap-2">
               {members.map((m) => (
-                <div key={m.id} className="group-member-chip">
-                  <Avatar username={m.username} color={m.avatar_color} />
+                <div key={m.id} className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-wa-surface rounded-full text-sm">
+                  <Avatar username={m.username} color={m.avatar_color} size={28} />
                   <span>{m.username}</span>
-                  <button type="button" onClick={() => removeMember(m.id)} aria-label="Remove">
+                  <button type="button" className="text-wa-muted hover:text-slate-200 text-xs ml-1" onClick={() => removeMember(m.id)} aria-label="Remove">
                     ✕
                   </button>
                 </div>
               ))}
               {members.length === 0 && (
-                <span className="modal-hint">You will be added automatically</span>
+                <span className="text-xs text-wa-muted">You will be added automatically</span>
               )}
             </div>
           </div>
 
-          <button type="submit" className="modal-confirm-btn full-width" disabled={creating || !name.trim()}>
+          <button
+            type="submit"
+            className="w-full py-2.5 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-50 rounded-lg text-white font-semibold text-sm"
+            disabled={creating || !name.trim()}
+          >
             {creating ? 'Creating…' : 'Create group'}
           </button>
         </form>

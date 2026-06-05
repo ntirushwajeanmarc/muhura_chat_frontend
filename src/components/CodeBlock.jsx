@@ -41,45 +41,17 @@ hljs.registerLanguage('kotlin', kotlin);
 hljs.registerLanguage('swift', swift);
 
 const LANG_ALIASES = {
-  js: 'javascript',
-  jsx: 'javascript',
-  ts: 'typescript',
-  tsx: 'typescript',
-  py: 'python',
-  sh: 'bash',
-  shell: 'bash',
-  zsh: 'bash',
-  yml: 'yaml',
-  html: 'xml',
-  htm: 'xml',
-  svg: 'xml',
-  c: 'cpp',
-  'c++': 'cpp',
-  h: 'cpp',
-  cs: 'csharp',
-  'c#': 'csharp',
-  md: 'markdown',
+  js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
+  py: 'python', sh: 'bash', shell: 'bash', zsh: 'bash', yml: 'yaml',
+  html: 'xml', htm: 'xml', svg: 'xml', c: 'cpp', 'c++': 'cpp', h: 'cpp',
+  cs: 'csharp', 'c#': 'csharp', md: 'markdown',
 };
 
 const LANG_LABELS = {
-  javascript: 'JavaScript',
-  typescript: 'TypeScript',
-  python: 'Python',
-  java: 'Java',
-  css: 'CSS',
-  json: 'JSON',
-  bash: 'Bash',
-  xml: 'HTML',
-  sql: 'SQL',
-  cpp: 'C++',
-  go: 'Go',
-  rust: 'Rust',
-  php: 'PHP',
-  yaml: 'YAML',
-  markdown: 'Markdown',
-  csharp: 'C#',
-  kotlin: 'Kotlin',
-  swift: 'Swift',
+  javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', java: 'Java',
+  css: 'CSS', json: 'JSON', bash: 'Bash', xml: 'HTML', sql: 'SQL', cpp: 'C++',
+  go: 'Go', rust: 'Rust', php: 'PHP', yaml: 'YAML', markdown: 'Markdown',
+  csharp: 'C#', kotlin: 'Kotlin', swift: 'Swift',
 };
 
 function normalizeLang(lang) {
@@ -113,16 +85,17 @@ export default function CodeBlock({ code, lang: langHint = '' }) {
   const label = formatLangLabel(language);
 
   return (
-    <div className="msg-code-block">
-      <div className="msg-code-header">
-        <span className="msg-code-lang">{label}</span>
-        <CopyButton text={code} className="msg-code-copy" title="Copy code" />
-      </div>
-      <pre className="msg-code-pre">
-        <code
-          className="hljs msg-code-hljs"
-          dangerouslySetInnerHTML={{ __html: html }}
+    <div className="border border-[#30363d] rounded-xl overflow-hidden max-w-full bg-[#0d1117] shadow-md">
+      <div className="flex items-center justify-between gap-2 px-3.5 py-2 bg-[#161b22] border-b border-[#30363d]">
+        <span className="text-xs font-semibold text-[#8b949e]">{label}</span>
+        <CopyButton
+          text={code}
+          className="flex items-center justify-center w-7 h-7 rounded-md border border-[#30363d] bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] hover:border-[#484f58]"
+          title="Copy code"
         />
+      </div>
+      <pre className="m-0 p-3.5 overflow-x-auto bg-[#0d1117]">
+        <code className="hljs block font-mono text-[13px] leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />
       </pre>
     </div>
   );

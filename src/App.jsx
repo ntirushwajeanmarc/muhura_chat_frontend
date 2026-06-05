@@ -6,7 +6,13 @@ import './index.css';
 
 const AppInner = () => {
   const { user, loading } = useAuth();
-  if (loading) return <div className="loading-screen">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center text-wa-muted">
+        Loading...
+      </div>
+    );
+  }
   return user ? <ChatPage /> : <AuthPage />;
 };
 

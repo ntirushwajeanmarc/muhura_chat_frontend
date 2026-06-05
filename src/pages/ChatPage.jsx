@@ -5,26 +5,15 @@ import { useSocket } from '../hooks/useSocket';
 import { BACKEND_URL } from '../config';
 import { fetchRoomMessages } from '../api/messages';
 import { fetchChats, startDirectChat, createGroupChat } from '../api/chats';
+import { uploadFile } from '../api/attachments';
 import MessageContent from '../components/MessageContent';
+import MessageAttachment from '../components/MessageAttachment';
 import CopyButton from '../components/CopyButton';
 import EmojiPicker from '../components/EmojiPicker';
 import ReplyButton, { truncateReply } from '../components/ReplyButton';
 import UserSearchModal from '../components/UserSearchModal';
 import CreateGroupModal from '../components/CreateGroupModal';
-
-const Avatar = ({ username, color, size = 36 }) => (
-  <div
-    className="user-avatar"
-    style={{
-      width: size,
-      height: size,
-      background: color || '#25d366',
-      fontSize: size * 0.4,
-    }}
-  >
-    {username?.[0]?.toUpperCase()}
-  </div>
-);
+import Avatar from '../components/Avatar';
 
 function roomLabel(room) {
   if (!room) return '';
@@ -56,7 +45,9 @@ export default function ChatPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const messagesAreaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
@@ -193,7 +184,10 @@ export default function ChatPage() {
         refreshChats();
         return;
       }
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
       refreshChats();
     });
     const offOnline = on('online_users', (users) => setOnlineUsers(users));
@@ -241,6 +235,29 @@ export default function ChatPage() {
     sendTyping(activeRoom.id, false);
     stickToBottomRef.current = true;
     requestAnimationFrame(() => scrollToBottom('smooth'));
+  };
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !activeRoom || uploading) return;
+
+    setUploading(true);
+    try {
+      await uploadFile(activeRoom.id, file, {
+        content: input.trim(),
+        replyToId: replyingTo?.id ?? null,
+      });
+      setInput('');
+      setReplyingTo(null);
+      stickToBottomRef.current = true;
+      requestAnimationFrame(() => scrollToBottom('smooth'));
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to upload file';
+      alert(message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -301,18 +318,22 @@ export default function ChatPage() {
     return (
       <button
         key={room.id}
-        className={`chat-item ${activeRoom?.id === room.id ? 'active' : ''}`}
+        className={`flex items-center gap-2.5 w-full p-2.5 rounded-lg text-left transition-colors ${
+          activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/60'
+        }`}
         onClick={() => selectRoom(room)}
       >
         {room.type === 'direct' ? (
           <Avatar username={avatarName} color={avatarColor} size={40} />
         ) : (
-          <span className="chat-item-icon">{prefix || '💬'}</span>
+          <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">
+            {prefix || '💬'}
+          </span>
         )}
-        <div className="chat-item-info">
-          <span className="chat-item-name">{label}</span>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm truncate text-slate-100">{label}</div>
           {room.last_message && (
-            <span className="chat-item-preview">{truncateReply(room.last_message, 40)}</span>
+            <div className="text-xs text-wa-muted truncate">{truncateReply(room.last_message, 40)}</div>
           )}
         </div>
       </button>
@@ -329,142 +350,168 @@ export default function ChatPage() {
       ? `Message ${roomLabel(activeRoom)}…`
       : `Message #${activeRoom?.name || '...'} (Shift+Enter for new line)`;
 
+  const isOwn = (msg) => msg.username === user?.username;
+
   return (
-    <div className="chat-app">
+    <div className="flex h-screen overflow-hidden">
       {showNewChat && (
-        <UserSearchModal
-          title="New chat"
-          onSelect={handleStartDirect}
-          onClose={() => setShowNewChat(false)}
-        />
+        <UserSearchModal title="New chat" onSelect={handleStartDirect} onClose={() => setShowNewChat(false)} />
       )}
       {showNewGroup && (
-        <CreateGroupModal
-          onCreate={handleCreateGroup}
-          onClose={() => setShowNewGroup(false)}
-        />
+        <CreateGroupModal onCreate={handleCreateGroup} onClose={() => setShowNewGroup(false)} />
       )}
 
-      <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
-        <div className="sidebar-header">
-          <img src="/favicon.png" alt="" className="brand-logo" />
-          <span className="brand-text">StudyChat</span>
-          <button className="toggle-btn" onClick={() => setSidebarOpen((o) => !o)}>
+      <aside
+        className={`flex flex-col bg-wa-dark border-r border-wa-border transition-all overflow-hidden ${
+          sidebarOpen ? 'w-60 min-w-[240px]' : 'w-[52px] min-w-[52px]'
+        }`}
+      >
+        <div className="flex items-center gap-2 px-3 h-[60px] border-b border-wa-border shrink-0">
+          <img src="/favicon.png" alt="" className="w-7 h-7 rounded-md shrink-0" />
+          {sidebarOpen && <span className="font-bold text-sm truncate">StudyChat</span>}
+          <button
+            className="ml-auto text-wa-muted hover:text-slate-200 text-base shrink-0"
+            onClick={() => setSidebarOpen((o) => !o)}
+          >
             {sidebarOpen ? '←' : '→'}
           </button>
         </div>
 
-        <div className="sidebar-actions">
-          <button type="button" className="sidebar-action-btn" onClick={() => setShowNewChat(true)}>
-            💬 New chat
-          </button>
-          <button type="button" className="sidebar-action-btn" onClick={() => setShowNewGroup(true)}>
-            👥 New group
-          </button>
-        </div>
-
-        <div className="sidebar-section">
-          <div className="section-label">CHATS</div>
-          {directChats.length === 0 && (
-            <div className="sidebar-empty">Search someone to start chatting</div>
-          )}
-          {directChats.map(renderChatItem)}
-        </div>
-
-        <div className="sidebar-section">
-          <div className="section-label">GROUPS</div>
-          {groupChats.length === 0 && (
-            <div className="sidebar-empty">Create a group to chat together</div>
-          )}
-          {groupChats.map(renderChatItem)}
-        </div>
-
-        <div className="sidebar-section sidebar-section-channels">
-          <div className="section-label">CHANNELS</div>
-          {publicRooms.map((room) => (
+        {sidebarOpen && (
+          <div className="flex flex-col gap-1 p-2 border-b border-wa-border shrink-0">
             <button
-              key={room.id}
-              className={`chat-item ${activeRoom?.id === room.id ? 'active' : ''}`}
-              onClick={() => selectRoom(room)}
+              type="button"
+              className="w-full px-2.5 py-2 rounded-lg bg-wa-surface/80 hover:bg-wa-surface text-sm text-left"
+              onClick={() => setShowNewChat(true)}
             >
-              <span className="chat-item-icon">#</span>
-              <div className="chat-item-info">
-                <span className="chat-item-name">{room.name}</span>
-              </div>
+              💬 New chat
             </button>
-          ))}
-        </div>
+            <button
+              type="button"
+              className="w-full px-2.5 py-2 rounded-lg bg-wa-surface/80 hover:bg-wa-surface text-sm text-left"
+              onClick={() => setShowNewGroup(true)}
+            >
+              👥 New group
+            </button>
+          </div>
+        )}
 
-        <div className="sidebar-section sidebar-section-online">
-          <div className="section-label">ONLINE — {onlineUsers.length}</div>
-          {onlineUsers.map((u) => (
-            <div key={u} className="online-user">
-              <span className="online-dot" />
-              <span>{u}</span>
+        {sidebarOpen && (
+          <>
+            <div className="p-2 overflow-y-auto max-h-[28vh] shrink-0">
+              <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">CHATS</div>
+              {directChats.length === 0 && (
+                <p className="text-xs text-wa-muted px-2">Search someone to start chatting</p>
+              )}
+              {directChats.map(renderChatItem)}
             </div>
-          ))}
-        </div>
 
-        <div className="sidebar-footer">
+            <div className="p-2 overflow-y-auto max-h-[28vh] shrink-0">
+              <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">GROUPS</div>
+              {groupChats.length === 0 && (
+                <p className="text-xs text-wa-muted px-2">Create a group to chat together</p>
+              )}
+              {groupChats.map(renderChatItem)}
+            </div>
+
+            <div className="p-2 overflow-y-auto max-h-[22vh] shrink-0">
+              <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">CHANNELS</div>
+              {publicRooms.map((room) => (
+                <button
+                  key={room.id}
+                  className={`flex items-center gap-2.5 w-full p-2.5 rounded-lg text-left transition-colors ${
+                    activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/60'
+                  }`}
+                  onClick={() => selectRoom(room)}
+                >
+                  <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
+                  <span className="font-semibold text-sm truncate">{room.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 p-2 overflow-y-auto min-h-[60px]">
+              <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">
+                ONLINE — {onlineUsers.length}
+              </div>
+              {onlineUsers.map((u) => (
+                <div key={u} className="flex items-center gap-2 px-2.5 py-1.5 text-sm text-wa-muted">
+                  <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                  <span className="truncate">{u}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex items-center gap-2.5 p-3 border-t border-wa-border shrink-0">
           <Avatar username={user?.username} color={user?.avatar_color} size={32} />
-          <span className="footer-username">{user?.username}</span>
-          <button className="logout-btn" onClick={logout} title="Logout">⏻</button>
+          {sidebarOpen && <span className="text-sm font-semibold flex-1 truncate">{user?.username}</span>}
+          {sidebarOpen && (
+            <button className="text-wa-muted hover:text-red-400 text-base" onClick={logout} title="Logout">
+              ⏻
+            </button>
+          )}
         </div>
       </aside>
 
-      <main className="chat-main">
-        <header className="chat-header">
+      <main className="flex-1 flex flex-col overflow-hidden bg-wa-chat">
+        <header className="flex items-center gap-3 px-5 h-[60px] border-b border-wa-border bg-wa-panel shrink-0">
           {headerAvatar}
-          <div className="header-room">
-            {activeRoom?.type === 'public' && <span className="header-hash">#</span>}
-            {activeRoom?.type === 'group' && <span className="header-hash">👥</span>}
+          <div className="flex items-center gap-1.5 font-semibold text-base">
+            {activeRoom?.type === 'public' && <span className="text-wa-muted">#</span>}
+            {activeRoom?.type === 'group' && <span>👥</span>}
             <span>{roomLabel(activeRoom) || 'Select a chat'}</span>
           </div>
           {activeRoom?.type === 'group' && activeRoom.member_count && (
-            <span className="header-desc">{activeRoom.member_count} members</span>
+            <span className="text-sm text-wa-muted border-l border-wa-border pl-3">
+              {activeRoom.member_count} members
+            </span>
           )}
           {activeRoom?.type === 'public' && activeRoom?.description && (
-            <span className="header-desc">{activeRoom.description}</span>
+            <span className="text-sm text-wa-muted border-l border-wa-border pl-3">{activeRoom.description}</span>
           )}
         </header>
 
-        <div className="messages-area" ref={messagesAreaRef}>
-          {loadingOlder && (
-            <div className="messages-load-older">Loading older messages…</div>
-          )}
+        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-0.5 chat-wallpaper" ref={messagesAreaRef}>
+          {loadingOlder && <p className="text-center text-sm text-wa-muted py-2">Loading older messages…</p>}
           {!loadingOlder && hasMoreOlder && messages.length > 0 && (
-            <div className="messages-load-hint">Scroll up for older messages</div>
+            <p className="text-center text-xs text-wa-muted py-2">Scroll up for older messages</p>
           )}
           {!hasMoreOlder && messages.length > 0 && (
-            <div className="messages-start-hint">Beginning of conversation</div>
+            <p className="text-center text-xs text-wa-muted py-2 border-b border-wa-border mb-2">Beginning of conversation</p>
           )}
           {groupMessages(messages).map((msg) => (
-            <div
-              key={msg.id}
-              className={`message ${msg.grouped ? 'grouped' : ''} ${msg.username === user?.username ? 'own' : ''}`}
-            >
-              {!msg.grouped && (
-                <div className="msg-header">
+            <div key={msg.id} className={`py-0.5 ${!msg.grouped ? 'mt-3' : ''}`}>
+              {!msg.grouped && !isOwn(msg) && (
+                <div className="flex items-center gap-2.5 mb-1">
                   <Avatar username={msg.username} color={msg.avatar_color} size={32} />
-                  <span className="msg-username">{msg.username}</span>
-                  <span className="msg-time">{formatTime(msg.created_at)}</span>
+                  <span className="font-semibold text-sm">{msg.username}</span>
+                  <span className="text-[11px] text-wa-muted">{formatTime(msg.created_at)}</span>
                 </div>
               )}
-              <div className={`msg-body ${msg.grouped ? 'msg-body-grouped' : ''}`}>
-                <div className="msg-bubble">
-                  <div className="msg-actions">
+              <div className={`flex ${isOwn(msg) ? 'justify-end' : ''} ${!isOwn(msg) && !msg.grouped ? 'pl-[42px]' : ''} ${!isOwn(msg) && msg.grouped ? 'pl-[42px]' : ''}`}>
+                <div
+                  className={`relative inline-block max-w-[min(65%,520px)] text-sm leading-relaxed shadow-sm ${
+                    isOwn(msg)
+                      ? 'bg-wa-bubble rounded-lg rounded-br-sm pl-3.5 pr-14 py-2'
+                      : 'bg-wa-surface rounded-lg rounded-bl-sm pl-3.5 pr-14 py-2'
+                  }`}
+                >
+                  <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-55 hover:opacity-100 transition-opacity">
                     <ReplyButton onClick={() => startReply(msg)} />
-                    <CopyButton text={msg.content} className="msg-copy-btn" title="Copy message" />
+                    {msg.content && <CopyButton text={msg.content} title="Copy message" />}
                   </div>
                   {msg.reply_to && (
-                    <div className="msg-reply-quote">
-                      <span className="msg-reply-quote-user">@{msg.reply_to.username}</span>
-                      <span className="msg-reply-quote-text">{truncateReply(msg.reply_to.content)}</span>
+                    <div className="flex flex-col gap-0.5 mb-1.5 p-1.5 border-l-[3px] border-wa-accent rounded bg-black/20 text-xs">
+                      <span className="font-semibold text-wa-accent-hover">@{msg.reply_to.username}</span>
+                      <span className="text-wa-muted truncate">{truncateReply(msg.reply_to.content)}</span>
                     </div>
                   )}
-                  <MessageContent content={msg.content} />
+                  {msg.attachment && <MessageAttachment attachment={msg.attachment} />}
+                  {msg.content && <MessageContent content={msg.content} />}
                   {msg.grouped && (
-                    <span className="msg-bubble-time">{formatTime(msg.created_at)}</span>
+                    <span className="block text-[10px] text-wa-muted text-right mt-0.5">{formatTime(msg.created_at)}</span>
                   )}
                 </div>
               </div>
@@ -472,8 +519,12 @@ export default function ChatPage() {
           ))}
 
           {typingUsers.length > 0 && (
-            <div className="typing-indicator">
-              <span className="typing-dots"><span /><span /><span /></span>
+            <div className="flex items-center gap-2 text-sm text-wa-muted mt-2">
+              <span className="flex gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
+                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
+                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
+              </span>
               <span>{typingUsers.join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...</span>
             </div>
           )}
@@ -481,14 +532,14 @@ export default function ChatPage() {
         </div>
 
         {replyingTo && (
-          <div className="reply-compose-bar">
-            <div className="reply-compose-text">
-              <span className="reply-compose-label">Replying to @{replyingTo.username}</span>
-              <span className="reply-compose-snippet">{truncateReply(replyingTo.content, 120)}</span>
+          <div className="flex items-center gap-3 px-5 py-2.5 border-t border-wa-border bg-wa-panel">
+            <div className="flex-1 min-w-0 border-l-[3px] border-wa-accent pl-2.5">
+              <span className="block text-xs font-semibold text-wa-accent-hover">Replying to @{replyingTo.username}</span>
+              <span className="block text-sm text-wa-muted truncate">{truncateReply(replyingTo.content, 120)}</span>
             </div>
             <button
               type="button"
-              className="reply-compose-cancel"
+              className="w-7 h-7 rounded-md bg-wa-surface text-wa-muted hover:text-slate-200"
               onClick={() => setReplyingTo(null)}
               aria-label="Cancel reply"
             >
@@ -497,12 +548,28 @@ export default function ChatPage() {
           </div>
         )}
 
-        <form className="message-form" onSubmit={handleSend}>
-          <div className="message-input-wrap">
+        <form className="flex items-end gap-2.5 px-5 py-3 border-t border-wa-border bg-wa-panel" onSubmit={handleSend}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+            onChange={handleFileSelect}
+          />
+          <div className="flex-1 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors">
+            <button
+              type="button"
+              className="w-9 h-9 rounded-lg text-lg hover:bg-wa-panel disabled:opacity-40 shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!activeRoom || uploading}
+              title="Attach file"
+            >
+              {uploading ? '…' : '📎'}
+            </button>
             <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
             <textarea
               ref={inputRef}
-              className="message-input"
+              className="flex-1 bg-transparent border-none outline-none text-sm py-2 min-h-9 max-h-40 resize-none placeholder:text-wa-muted"
               value={input}
               onChange={handleInputChange}
               onKeyDown={(e) => {
@@ -516,17 +583,17 @@ export default function ChatPage() {
                   handleSend(e);
                 }
               }}
-              placeholder={
-                replyingTo
-                  ? `Reply to @${replyingTo.username}…`
-                  : placeholder
-              }
+              placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : placeholder}
               disabled={!activeRoom}
               rows={1}
               autoFocus
             />
           </div>
-          <button type="submit" className="send-btn" disabled={!input.trim()}>
+          <button
+            type="submit"
+            className="px-4 py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white text-base transition-colors"
+            disabled={!input.trim()}
+          >
             ➤
           </button>
         </form>

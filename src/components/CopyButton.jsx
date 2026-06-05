@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react';
 
-export default function CopyButton({ text, className = 'copy-btn', title = 'Copy message' }) {
+const btnClass =
+  'flex items-center justify-center w-6 h-6 rounded-md text-wa-muted hover:text-slate-200 hover:bg-white/10 transition-colors';
+
+export default function CopyButton({ text, className = btnClass, title = 'Copy message' }) {
   const [copied, setCopied] = useState(false);
 
   const copy = useCallback(async (e) => {
@@ -15,13 +18,7 @@ export default function CopyButton({ text, className = 'copy-btn', title = 'Copy
   }, [text]);
 
   return (
-    <button
-      type="button"
-      className={className}
-      onClick={copy}
-      title={copied ? 'Copied!' : title}
-      aria-label={title}
-    >
+    <button type="button" className={className} onClick={copy} title={copied ? 'Copied!' : title} aria-label={title}>
       {copied ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M20 6L9 17l-5-5" />

@@ -53,7 +53,7 @@ function TextPart({ text }) {
   if (!text) return null;
   const hasNewlines = text.includes('\n');
   return (
-    <span className={hasNewlines ? 'msg-text msg-text-pre' : 'msg-text'}>
+    <span className={hasNewlines ? 'whitespace-pre-wrap break-words' : 'break-words'}>
       {text}
     </span>
   );
@@ -63,7 +63,7 @@ export default function MessageContent({ content }) {
   const segments = parseMessageContent(content);
 
   return (
-    <div className="msg-content">
+    <div className="flex flex-col gap-1.5 min-w-0">
       {segments.map((seg, i) =>
         seg.type === 'code' ? (
           <CodeBlock key={i} code={seg.value} lang={seg.lang} />

@@ -30,10 +30,10 @@ export default function EmojiPicker({ onSelect, disabled }) {
   };
 
   return (
-    <div className="emoji-picker-wrap" ref={rootRef}>
+    <div className="relative shrink-0" ref={rootRef}>
       <button
         type="button"
-        className="emoji-toggle-btn"
+        className="w-9 h-9 rounded-lg text-xl hover:bg-wa-panel disabled:opacity-40 transition-colors"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
         title="Add emoji"
@@ -43,12 +43,16 @@ export default function EmojiPicker({ onSelect, disabled }) {
         😊
       </button>
       {open && (
-        <div className="emoji-picker-panel" role="listbox" aria-label="Emoji picker">
+        <div
+          className="absolute bottom-full left-0 mb-2 z-50 grid grid-cols-8 gap-0.5 p-2.5 bg-wa-panel border border-wa-border rounded-xl shadow-2xl max-h-56 overflow-y-auto"
+          role="listbox"
+          aria-label="Emoji picker"
+        >
           {EMOJIS.map((emoji) => (
             <button
               key={emoji}
               type="button"
-              className="emoji-picker-item"
+              className="w-9 h-9 rounded-lg text-xl hover:bg-wa-surface hover:scale-110 transition-all"
               onClick={() => pick(emoji)}
               aria-label={emoji}
             >
