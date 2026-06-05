@@ -293,12 +293,16 @@ export default function ChatPage() {
 
   const handleStartDirect = async (targetUser) => {
     const room = await startDirectChat(targetUser.id);
+    if (!room?.id) throw new Error('Could not open chat');
+    const chatRoom = { ...room, type: 'direct' };
     setDirectChats((prev) => {
-      const exists = prev.find((r) => r.id === room.id);
-      if (exists) return prev;
-      return [room, ...prev];
+      const exists = prev.find((r) => r.id === chatRoom.id);
+      if (exists) {
+        return prev.map((r) => (r.id === chatRoom.id ? { ...r, ...chatRoom } : r));
+      }
+      return [chatRoom, ...prev];
     });
-    setActiveRoom(room);
+    setActiveRoom(chatRoom);
     setShowNewChat(false);
   };
 

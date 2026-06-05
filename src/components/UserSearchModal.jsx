@@ -38,6 +38,8 @@ export default function UserSearchModal({ title, onSelect, onClose, multiSelect 
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState([]);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState('');
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -65,10 +67,18 @@ export default function UserSearchModal({ title, onSelect, onClose, multiSelect 
     return () => clearTimeout(timer);
   }, [query]);
 
-  const toggleUser = (user) => {
+  const toggleUser = async (user) => {
     if (!multiSelect) {
-      onSelect(user);
-      onClose();
+      setStarting(true);
+      setError('');
+      try {
+        await onSelect(user);
+        onClose();
+      } catch (err) {
+        setError(err.response?.data?.error || err.message || 'Could not start chat');
+      } finally {
+        setStarting(false);
+      }
       return;
     }
     setSelected((prev) => {
@@ -118,6 +128,12 @@ export default function UserSearchModal({ title, onSelect, onClose, multiSelect 
           )}
         </div>
 
+        {error && (
+          <p className="mx-4 mt-2 text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
+
         <div className="flex-1 overflow-y-auto p-2 min-h-[200px] max-h-[360px]">
           {!showSuggestions && (
             <p className="text-center text-wa-muted text-sm py-4">
@@ -140,7 +156,8 @@ export default function UserSearchModal({ title, onSelect, onClose, multiSelect 
               <button
                 key={user.id}
                 type="button"
-                className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-colors ${
+                disabled={starting}
+                className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-colors disabled:opacity-50 ${
                   isSelected ? 'bg-wa-accent/15' : 'hover:bg-wa-surface'
                 }`}
                 onClick={() => toggleUser(user)}
