@@ -1,5 +1,13 @@
 import axios from 'axios';
 import { secureFileUrl } from './assetUrl';
+import { imageMimeFromPath, isImagePath } from './imageAttachment';
+
+const imageBlobCache = new Map();
+
+export function getAuthHeaders() {
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 async function blobErrorMessage(blob) {
   try {
@@ -11,21 +19,41 @@ async function blobErrorMessage(blob) {
   }
 }
 
+function normalizeImageBlob(blob, storedPath) {
+  if (!isImagePath(storedPath)) return blob;
+  const expectedType = imageMimeFromPath(storedPath);
+  if (!blob.type || blob.type === 'application/octet-stream' || !blob.type.startsWith('image/')) {
+    return new Blob([blob], { type: expectedType });
+  }
+  return blob;
+}
+
 /** Fetch a protected file as a Blob (throws on auth/404 errors). */
-export async function fetchAuthenticatedBlob(storedPath, { download = false } = {}) {
+export async function fetchAuthenticatedBlob(storedPath, { download = false, skipCache = false } = {}) {
   if (!storedPath) throw new Error('Missing file path');
+
+  if (!download && !skipCache && imageBlobCache.has(storedPath)) {
+    return imageBlobCache.get(storedPath);
+  }
 
   try {
     const res = await axios.get(secureFileUrl(storedPath, { download }), {
       responseType: 'blob',
+      headers: getAuthHeaders(),
     });
 
     const type = res.data?.type || res.headers['content-type'] || '';
-    if (type.includes('application/json')) {
+    if (type.includes('application/json') || type.includes('text/html')) {
       throw new Error(await blobErrorMessage(res.data));
     }
 
-    return res.data;
+    let blob = res.data;
+    if (!download && isImagePath(storedPath)) {
+      blob = normalizeImageBlob(blob, storedPath);
+      imageBlobCache.set(storedPath, blob);
+    }
+
+    return blob;
   } catch (err) {
     if (err.response?.data instanceof Blob) {
       throw new Error(await blobErrorMessage(err.response.data));
@@ -36,7 +64,7 @@ export async function fetchAuthenticatedBlob(storedPath, { download = false } = 
 
 /** Trigger a browser download for an authenticated file. */
 export async function downloadAuthenticatedFile(storedPath, filename) {
-  const blob = await fetchAuthenticatedBlob(storedPath, { download: true });
+  const blob = await fetchAuthenticatedBlob(storedPath, { download: true, skipCache: true });
   const safeName = filename || 'download';
   const url = URL.createObjectURL(blob);
 

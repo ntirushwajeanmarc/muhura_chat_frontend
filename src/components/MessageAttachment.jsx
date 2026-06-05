@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { downloadAuthenticatedFile } from '../utils/fileDownload';
+import { isImageAttachment } from '../utils/imageAttachment';
 import AuthenticatedImage from './AuthenticatedImage';
 
 function fileIcon(mime) {
@@ -18,7 +19,7 @@ export default function MessageAttachment({ attachment }) {
 
   if (!attachment?.url) return null;
 
-  const isImage = attachment.mime?.startsWith('image/');
+  const isImage = isImageAttachment(attachment);
 
   const handleDownload = async () => {
     if (downloading) return;
@@ -27,10 +28,7 @@ export default function MessageAttachment({ attachment }) {
     try {
       await downloadAuthenticatedFile(attachment.url, attachment.name);
     } catch (err) {
-      const message = err.response?.data
-        ? 'Download failed — you may not have access or the file was removed'
-        : (err.message || 'Download failed');
-      setError(message);
+      setError(err.message || 'Download failed');
     } finally {
       setDownloading(false);
     }
@@ -42,25 +40,15 @@ export default function MessageAttachment({ attachment }) {
         <AuthenticatedImage
           storedPath={attachment.url}
           alt={attachment.name || 'Shared image'}
-          className="max-w-full max-h-72 rounded-md"
-          fallback={
-            <button
-              type="button"
-              className="text-sm text-wa-accent hover:underline disabled:opacity-50"
-              onClick={handleDownload}
-              disabled={downloading}
-            >
-              {downloading ? 'Downloading…' : 'Open image'}
-            </button>
-          }
+          className="max-w-full max-h-72 rounded-md object-contain"
         />
         <button
           type="button"
-          className="inline-block mt-1 text-xs text-wa-accent hover:underline disabled:opacity-50"
+          className="inline-block mt-1 text-xs text-wa-muted hover:text-wa-accent hover:underline disabled:opacity-50"
           onClick={handleDownload}
           disabled={downloading}
         >
-          {downloading ? 'Downloading…' : 'Download image'}
+          {downloading ? 'Downloading…' : 'Save image'}
         </button>
         {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
       </div>

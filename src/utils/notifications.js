@@ -69,7 +69,9 @@ export function showMessageNotification({ title, body, roomId, onClick }) {
 
 export function messagePreview(msg) {
   if (msg.attachment) {
-    if (msg.attachment.mime?.startsWith('image/')) return '📷 Photo';
+    const isImg = msg.attachment.mime?.startsWith('image/')
+      || /\.(jpe?g|png|gif|webp)$/i.test(msg.attachment.url || msg.attachment.name || '');
+    if (isImg) return '📷 Photo';
     return `📎 ${msg.attachment.name || 'File'}`;
   }
   const text = (msg.content || '').trim();

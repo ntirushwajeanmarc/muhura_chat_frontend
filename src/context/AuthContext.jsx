@@ -4,6 +4,11 @@ import { BACKEND_URL } from '../config';
 
 const AuthContext = createContext(null);
 
+const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+if (storedToken) {
+  axios.defaults.headers.common.Authorization = `Bearer ${storedToken}`;
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
