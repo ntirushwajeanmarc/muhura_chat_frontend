@@ -162,7 +162,7 @@ export default function UserSearchModal({ title, onSelect, onClose, multiSelect 
                 }`}
                 onClick={() => toggleUser(user)}
               >
-                <Avatar username={user.username} color={user.avatar_color} size={40} />
+                <Avatar username={user.username} color={user.avatar_color} avatarUrl={user.avatar_url} size={40} />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">
                     <HighlightMatch text={name} query={query.trim()} />

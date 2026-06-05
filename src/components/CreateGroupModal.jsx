@@ -83,7 +83,7 @@ export default function CreateGroupModal({ onCreate, onClose }) {
             <div className="flex flex-wrap gap-2">
               {members.map((m) => (
                 <div key={m.id} className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-wa-surface rounded-full text-sm">
-                  <Avatar username={m.username} color={m.avatar_color} size={28} />
+                  <Avatar username={m.username} color={m.avatar_color} avatarUrl={m.avatar_url} size={28} />
                   <span>{m.username}</span>
                   <button type="button" className="text-wa-muted hover:text-slate-200 text-xs ml-1" onClick={() => removeMember(m.id)} aria-label="Remove">
                     ✕

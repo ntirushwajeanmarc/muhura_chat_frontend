@@ -14,6 +14,7 @@ import EmojiPicker from '../components/EmojiPicker';
 import ReplyButton, { truncateReply } from '../components/ReplyButton';
 import UserSearchModal from '../components/UserSearchModal';
 import CreateGroupModal from '../components/CreateGroupModal';
+import SettingsModal from '../components/SettingsModal';
 import Avatar from '../components/Avatar';
 
 function roomLabel(room) {
@@ -46,6 +47,7 @@ export default function ChatPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
   const messagesAreaRef = useRef(null);
@@ -334,6 +336,7 @@ export default function ChatPage() {
     const label = roomLabel(room);
     const prefix = roomPrefix(room);
     const avatarColor = room.type === 'direct' ? room.peer?.avatar_color : null;
+    const avatarUrl = room.type === 'direct' ? room.peer?.avatar_url : null;
     const avatarName = room.type === 'direct' ? room.peer?.username : label;
 
     return (
@@ -345,7 +348,7 @@ export default function ChatPage() {
         onClick={() => selectRoom(room)}
       >
         {room.type === 'direct' ? (
-          <Avatar username={avatarName} color={avatarColor} size={40} />
+          <Avatar username={avatarName} color={avatarColor} avatarUrl={avatarUrl} size={40} />
         ) : (
           <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">
             {prefix || '💬'}
@@ -362,7 +365,7 @@ export default function ChatPage() {
   };
 
   const headerAvatar = activeRoom?.type === 'direct' && activeRoom.peer
-    ? <Avatar username={activeRoom.peer.username} color={activeRoom.peer.avatar_color} size={36} />
+    ? <Avatar username={activeRoom.peer.username} color={activeRoom.peer.avatar_color} avatarUrl={activeRoom.peer.avatar_url} size={36} />
     : null;
 
   const placeholder = activeRoom?.type === 'direct'
@@ -381,41 +384,67 @@ export default function ChatPage() {
       {showNewGroup && (
         <CreateGroupModal onCreate={handleCreateGroup} onClose={() => setShowNewGroup(false)} />
       )}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       <aside
-        className={`flex flex-col bg-wa-dark border-r border-wa-border transition-all overflow-hidden ${
-          sidebarOpen ? 'w-60 min-w-[240px]' : 'w-[52px] min-w-[52px]'
+        className={`flex flex-col bg-wa-dark border-r border-wa-border transition-all duration-200 ${
+          sidebarOpen ? 'w-60 min-w-[240px]' : 'w-14 min-w-[56px]'
         }`}
       >
-        <div className="flex items-center gap-2 px-3 h-[60px] border-b border-wa-border shrink-0">
-          <img src="/favicon.png" alt="" className="w-7 h-7 rounded-md shrink-0" />
-          {sidebarOpen && <span className="font-bold text-sm truncate">StudyChat</span>}
-          <button
-            className="ml-auto text-wa-muted hover:text-slate-200 text-base shrink-0"
-            onClick={() => setSidebarOpen((o) => !o)}
-          >
-            {sidebarOpen ? '←' : '→'}
-          </button>
+        <div
+          className={`flex items-center h-[60px] border-b border-wa-border shrink-0 ${
+            sidebarOpen ? 'gap-2 px-3' : 'justify-center px-1'
+          }`}
+        >
+          {sidebarOpen ? (
+            <>
+              <img src="/favicon.png" alt="" className="w-7 h-7 rounded-md shrink-0" />
+              <span className="font-bold text-sm truncate flex-1">StudyChat</span>
+              <button
+                type="button"
+                className="w-9 h-9 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center shrink-0"
+                onClick={() => setSidebarOpen(false)}
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+              >
+                ←
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="w-10 h-10 rounded-lg text-lg text-slate-100 hover:bg-wa-surface flex items-center justify-center"
+              onClick={() => setSidebarOpen(true)}
+              title="Open sidebar"
+              aria-label="Open sidebar"
+            >
+              ☰
+            </button>
+          )}
         </div>
 
-        {sidebarOpen && (
-          <div className="flex flex-col gap-1 p-2 border-b border-wa-border shrink-0">
-            <button
-              type="button"
-              className="w-full px-2.5 py-2 rounded-lg bg-wa-surface/80 hover:bg-wa-surface text-sm text-left"
-              onClick={() => setShowNewChat(true)}
-            >
-              💬 New chat
-            </button>
-            <button
-              type="button"
-              className="w-full px-2.5 py-2 rounded-lg bg-wa-surface/80 hover:bg-wa-surface text-sm text-left"
-              onClick={() => setShowNewGroup(true)}
-            >
-              👥 New group
-            </button>
-          </div>
-        )}
+        <div className={`flex flex-col gap-1 shrink-0 border-b border-wa-border ${sidebarOpen ? 'p-2' : 'p-1'}`}>
+          <button
+            type="button"
+            className={`rounded-lg bg-wa-surface/80 hover:bg-wa-surface text-sm transition-colors ${
+              sidebarOpen ? 'w-full px-2.5 py-2 text-left' : 'w-10 h-10 mx-auto flex items-center justify-center text-lg'
+            }`}
+            onClick={() => setShowNewChat(true)}
+            title="New chat"
+          >
+            {sidebarOpen ? '💬 New chat' : '💬'}
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg bg-wa-surface/80 hover:bg-wa-surface text-sm transition-colors ${
+              sidebarOpen ? 'w-full px-2.5 py-2 text-left' : 'w-10 h-10 mx-auto flex items-center justify-center text-lg'
+            }`}
+            onClick={() => setShowNewGroup(true)}
+            title="New group"
+          >
+            {sidebarOpen ? '👥 New group' : '👥'}
+          </button>
+        </div>
 
         {sidebarOpen && (
           <>
@@ -465,19 +494,75 @@ export default function ChatPage() {
           </>
         )}
 
-        <div className="flex items-center gap-2.5 p-3 border-t border-wa-border shrink-0">
-          <Avatar username={user?.username} color={user?.avatar_color} size={32} />
-          {sidebarOpen && <span className="text-sm font-semibold flex-1 truncate">{user?.username}</span>}
-          {sidebarOpen && (
-            <button className="text-wa-muted hover:text-red-400 text-base" onClick={logout} title="Logout">
-              ⏻
-            </button>
+        <div
+          className={`flex items-center border-t border-wa-border shrink-0 ${
+            sidebarOpen ? 'gap-2.5 p-3' : 'flex-col gap-2 py-3'
+          }`}
+        >
+          <button
+            type="button"
+            className="shrink-0 rounded-full hover:opacity-90"
+            onClick={() => setShowSettings(true)}
+            title="Settings"
+          >
+            <Avatar username={user?.username} color={user?.avatar_color} avatarUrl={user?.avatar_url} size={32} />
+          </button>
+          {sidebarOpen ? (
+            <>
+              <span className="text-sm font-semibold flex-1 truncate">{user?.username}</span>
+              <button
+                type="button"
+                className="w-8 h-8 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
+                onClick={() => setShowSettings(true)}
+                title="Settings"
+              >
+                ⚙
+              </button>
+              <button
+                type="button"
+                className="w-8 h-8 rounded-lg text-wa-muted hover:text-red-400 hover:bg-wa-surface flex items-center justify-center"
+                onClick={logout}
+                title="Logout"
+              >
+                ⏻
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
+                onClick={() => setShowSettings(true)}
+                title="Settings"
+              >
+                ⚙
+              </button>
+              <button
+                type="button"
+                className="w-10 h-10 rounded-lg text-wa-muted hover:text-red-400 hover:bg-wa-surface flex items-center justify-center"
+                onClick={logout}
+                title="Logout"
+              >
+                ⏻
+              </button>
+            </>
           )}
         </div>
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden bg-wa-chat">
         <header className="flex items-center gap-3 px-5 h-[60px] border-b border-wa-border bg-wa-panel shrink-0">
+          {!sidebarOpen && (
+            <button
+              type="button"
+              className="w-9 h-9 rounded-lg text-lg hover:bg-wa-surface flex items-center justify-center shrink-0"
+              onClick={() => setSidebarOpen(true)}
+              title="Open sidebar"
+              aria-label="Open sidebar"
+            >
+              ☰
+            </button>
+          )}
           {headerAvatar}
           <div className="flex items-center gap-1.5 font-semibold text-base">
             {activeRoom?.type === 'public' && <span className="text-wa-muted">#</span>}
@@ -506,7 +591,7 @@ export default function ChatPage() {
             <div key={msg.id} className={`py-0.5 ${!msg.grouped ? 'mt-3' : ''}`}>
               {!msg.grouped && !isOwn(msg) && (
                 <div className="flex items-center gap-2.5 mb-1">
-                  <Avatar username={msg.username} color={msg.avatar_color} size={32} />
+                  <Avatar username={msg.username} color={msg.avatar_color} avatarUrl={msg.avatar_url} size={32} />
                   <span className="font-semibold text-sm">{msg.username}</span>
                   <span className="text-[11px] text-wa-muted">{formatTime(msg.created_at)}</span>
                 </div>
@@ -586,7 +671,7 @@ export default function ChatPage() {
             accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
             onChange={handleFileSelect}
           />
-          <div className="flex-1 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors">
+          <div className="flex-1 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors overflow-visible">
             <button
               type="button"
               className="w-9 h-9 rounded-lg text-lg hover:bg-wa-panel disabled:opacity-40 shrink-0"

@@ -54,8 +54,18 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateSession = (updatedUser, newToken) => {
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+    if (newToken) {
+      localStorage.setItem('token', newToken);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+      setToken(newToken);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, updateSession, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,24 +1,59 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const EMOJIS = [
-  '😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '😉', '😍',
-  '🥰', '😘', '😎', '🤔', '😮', '😢', '😭', '😡', '🥳', '😴', '🤯', '🙄',
-  '👍', '👎', '👏', '🙌', '💪', '🤝', '👋', '🙏', '✌️', '🤞', '💯', '🔥',
-  '❤️', '💙', '💚', '💛', '💜', '🖤', '✨', '⭐', '🎉', '🎊', '🎈', '🏆',
-  '📚', '✏️', '📝', '💡', '✅', '❌', '⚠️', '❓', '❗', '🚀', '💻', '📎',
-  '☕', '🍕', '🎵', '⚽', '🌙', '☀️', '🌈', '🐱', '🐶', '🦋', '🌸', '🍀',
+  '😀', '😂', '😊', '😍', '😎', '🤔', '😢', '😡', '👍', '👎',
+  '👏', '🙏', '❤️', '🔥', '✅', '❌', '🎉', '📚', '💡', '🚀',
+  '☕', '✨', '💯', '🙌',
 ];
 
 export default function EmojiPicker({ onSelect, disabled }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
+  const [panelStyle, setPanelStyle] = useState({});
+  const btnRef = useRef(null);
+  const panelRef = useRef(null);
+
+  const updatePosition = () => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const panelWidth = 240;
+    const panelHeight = 160;
+    let left = rect.left;
+    let top = rect.top - panelHeight - 8;
+
+    if (left + panelWidth > window.innerWidth - 8) {
+      left = window.innerWidth - panelWidth - 8;
+    }
+    if (left < 8) left = 8;
+    if (top < 8) {
+      top = rect.bottom + 8;
+    }
+
+    setPanelStyle({ top, left, width: panelWidth });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    const onResize = () => updatePosition();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onResize, true);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onResize, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const close = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) {
-        setOpen(false);
+      if (
+        panelRef.current?.contains(e.target) ||
+        btnRef.current?.contains(e.target)
+      ) {
+        return;
       }
+      setOpen(false);
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
@@ -29,12 +64,19 @@ export default function EmojiPicker({ onSelect, disabled }) {
     setOpen(false);
   };
 
+  const toggle = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen((o) => !o);
+  };
+
   return (
-    <div className="relative shrink-0" ref={rootRef}>
+    <>
       <button
+        ref={btnRef}
         type="button"
-        className="w-9 h-9 rounded-lg text-xl hover:bg-wa-panel disabled:opacity-40 transition-colors"
-        onClick={() => setOpen((o) => !o)}
+        className="w-9 h-9 rounded-lg text-xl hover:bg-wa-panel disabled:opacity-40 shrink-0 transition-colors"
+        onClick={toggle}
         disabled={disabled}
         title="Add emoji"
         aria-label="Add emoji"
@@ -42,9 +84,11 @@ export default function EmojiPicker({ onSelect, disabled }) {
       >
         😊
       </button>
-      {open && (
+      {open && createPortal(
         <div
-          className="absolute bottom-full left-0 mb-2 z-50 grid grid-cols-8 gap-0.5 p-2.5 bg-wa-panel border border-wa-border rounded-xl shadow-2xl max-h-56 overflow-y-auto"
+          ref={panelRef}
+          className="fixed z-[200] grid grid-cols-6 gap-1 p-2 bg-wa-panel border border-wa-border rounded-xl shadow-2xl"
+          style={panelStyle}
           role="listbox"
           aria-label="Emoji picker"
         >
@@ -52,15 +96,16 @@ export default function EmojiPicker({ onSelect, disabled }) {
             <button
               key={emoji}
               type="button"
-              className="w-9 h-9 rounded-lg text-xl hover:bg-wa-surface hover:scale-110 transition-all"
+              className="w-9 h-9 rounded-lg text-xl hover:bg-wa-surface active:scale-95 transition-all"
               onClick={() => pick(emoji)}
               aria-label={emoji}
             >
               {emoji}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
