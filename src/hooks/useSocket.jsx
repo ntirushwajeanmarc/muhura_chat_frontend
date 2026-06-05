@@ -70,6 +70,16 @@ export const useSocket = (token) => {
     socketRef.current?.emit('send_message', { roomId, content, replyToId });
   }, []);
 
+  const editMessage = useCallback((roomId, messageId, content) => {
+    socketRef.current?.emit('edit_message', { roomId, messageId, content });
+  }, []);
+
+  const markRead = useCallback((roomId, messageId) => {
+    if (roomId && messageId) {
+      socketRef.current?.emit('mark_read', { roomId, messageId });
+    }
+  }, []);
+
   const sendTyping = useCallback((roomId, isTyping) => {
     socketRef.current?.emit('typing', { roomId, isTyping });
   }, []);
@@ -86,6 +96,8 @@ export const useSocket = (token) => {
     joinRooms,
     setPresenceRoom,
     sendMessage,
+    editMessage,
+    markRead,
     sendTyping,
     on,
     connected,

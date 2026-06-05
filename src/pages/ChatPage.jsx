@@ -10,6 +10,9 @@ import MessageContent from '../components/MessageContent';
 import MessageAttachment from '../components/MessageAttachment';
 import PendingUploadBubble from '../components/PendingUploadBubble';
 import CopyButton from '../components/CopyButton';
+import EditButton from '../components/EditButton';
+import MessageReceipt from '../components/MessageReceipt';
+import { indexReadStates, getMessageReceiptStatus } from '../utils/readReceipts';
 import EmojiPicker from '../components/EmojiPicker';
 import ReplyButton, { truncateReply } from '../components/ReplyButton';
 import UserSearchModal from '../components/UserSearchModal';
@@ -38,7 +41,7 @@ function roomPrefix(room) {
 
 export default function ChatPage() {
   const { user, token, logout } = useAuth();
-  const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, on, connected } = useSocket(token);
+  const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, markRead, on, connected } = useSocket(token);
   const [publicRooms, setPublicRooms] = useState([]);
   const [directChats, setDirectChats] = useState([]);
   const [groupChats, setGroupChats] = useState([]);
@@ -49,6 +52,11 @@ export default function ChatPage() {
   const [typingUsers, setTypingUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [editError, setEditError] = useState(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [roomReads, setRoomReads] = useState({});
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
@@ -169,6 +177,22 @@ export default function ChatPage() {
     requestAnimationFrame(() => scrollToBottom('auto'));
   }, [scrollToBottom]);
 
+  const fetchReadState = useCallback(async (roomId) => {
+    if (!roomId) return;
+    try {
+      const res = await axios.get(`${BACKEND_URL}/api/rooms/${roomId}/read-state`);
+      setRoomReads((prev) => ({ ...prev, [roomId]: indexReadStates(res.data.reads) }));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const markRoomAsRead = useCallback(() => {
+    if (!activeRoom || activeRoom.type === 'public' || messages.length === 0) return;
+    const latest = messages[messages.length - 1];
+    if (latest?.id) markRead(activeRoom.id, latest.id);
+  }, [activeRoom, messages, markRead]);
+
   const loadOlderMessages = useCallback(async () => {
     if (!activeRoom || loadingOlderRef.current || !hasMoreOlder) return;
     const oldest = messages[0];
@@ -255,14 +279,24 @@ export default function ChatPage() {
     setPresenceRoom(activeRoom.id);
     setUnread((prev) => ({ ...prev, [activeRoom.id]: 0 }));
     loadInitialMessages(activeRoom.id);
+    if (activeRoom.type !== 'public') fetchReadState(activeRoom.id);
     setTypingUsers([]);
     setOnlineUsers([]);
     setReplyingTo(null);
+    setEditingMessageId(null);
+    setEditDraft('');
+    setEditError(null);
     setPendingUpload((prev) => {
       if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
       return null;
     });
-  }, [activeRoom, joinRoom, setPresenceRoom, loadInitialMessages]);
+  }, [activeRoom, joinRoom, setPresenceRoom, loadInitialMessages, fetchReadState]);
+
+  useEffect(() => {
+    if (!connected || !activeRoom || activeRoom.type === 'public' || messages.length === 0) return;
+    const timer = setTimeout(markRoomAsRead, 400);
+    return () => clearTimeout(timer);
+  }, [connected, activeRoom?.id, activeRoom?.type, messages, markRoomAsRead]);
 
   useEffect(() => {
     const el = messagesAreaRef.current;
@@ -333,11 +367,31 @@ export default function ChatPage() {
         isTyping ? [...new Set([...prev, username])] : prev.filter((u) => u !== username)
       );
     });
+    const offEdited = on('message_edited', (msg) => {
+      if (msg.room_id && msg.room_id !== activeRoomIdRef.current) return;
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
+      refreshChats();
+    });
+    const offRead = on('read_receipt', (receipt) => {
+      if (!receipt?.room_id || !receipt?.user_id) return;
+      setRoomReads((prev) => ({
+        ...prev,
+        [receipt.room_id]: {
+          ...(prev[receipt.room_id] || {}),
+          [receipt.user_id]: {
+            lastReadMessageId: receipt.last_read_message_id,
+            lastReadAt: receipt.last_read_at,
+          },
+        },
+      }));
+    });
     return () => {
       offMsg?.();
       offRoom?.();
       offOnline?.();
       offTyping?.();
+      offEdited?.();
+      offRead?.();
     };
   }, [connected, on, refreshChats, openRoomById, joinRoom]);
 
@@ -429,6 +483,44 @@ export default function ChatPage() {
       content: msg.content,
     });
     inputRef.current?.focus();
+  };
+
+  const startEdit = (msg) => {
+    setEditingMessageId(msg.id);
+    setEditDraft(msg.content || '');
+    setEditError(null);
+    setReplyingTo(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingMessageId(null);
+    setEditDraft('');
+    setEditError(null);
+  };
+
+  const saveEdit = async (msg) => {
+    const trimmed = editDraft.trim();
+    if (!trimmed && !msg.attachment) {
+      setEditError('Message cannot be empty');
+      return;
+    }
+    if (!activeRoom) return;
+
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const res = await axios.patch(
+        `${BACKEND_URL}/api/rooms/${activeRoom.id}/messages/${msg.id}`,
+        { content: editDraft }
+      );
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? res.data.message : m)));
+      cancelEdit();
+      refreshChats();
+    } catch (err) {
+      setEditError(err.response?.data?.error || 'Could not save edit');
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const groupMessages = (msgs) => {
@@ -799,7 +891,12 @@ export default function ChatPage() {
                 >
                   <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-55 hover:opacity-100 transition-opacity">
                     <ReplyButton onClick={() => startReply(msg)} />
-                    {msg.content && <CopyButton text={msg.content} title="Copy message" />}
+                    {isOwn(msg) && editingMessageId !== msg.id && (
+                      <EditButton onClick={() => startEdit(msg)} />
+                    )}
+                    {msg.content && editingMessageId !== msg.id && (
+                      <CopyButton text={msg.content} title="Copy message" />
+                    )}
                   </div>
                   {msg.reply_to && (
                     <div className="flex flex-col gap-0.5 mb-1.5 p-1.5 border-l-[3px] border-wa-accent rounded bg-black/20 text-xs">
@@ -808,8 +905,60 @@ export default function ChatPage() {
                     </div>
                   )}
                   {msg.attachment && <MessageAttachment attachment={msg.attachment} />}
-                  {msg.content && <MessageContent content={msg.content} />}
-                  {msg.grouped && (
+                  {editingMessageId === msg.id ? (
+                    <div className="flex flex-col gap-2 min-w-[200px] pr-2">
+                      <textarea
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        className="w-full min-h-[72px] bg-black/20 border border-wa-border rounded-lg px-2.5 py-2 text-sm text-slate-100 resize-y focus:outline-none focus:border-wa-accent"
+                        autoFocus
+                        disabled={editSaving}
+                      />
+                      {editError && <span className="text-xs text-red-400">{editError}</span>}
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          disabled={editSaving}
+                          className="px-3 py-1 text-xs rounded-md bg-wa-surface text-wa-muted hover:text-slate-200 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveEdit(msg)}
+                          disabled={editSaving}
+                          className="px-3 py-1 text-xs rounded-md bg-wa-accent text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                          {editSaving ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    msg.content && <MessageContent content={msg.content} />
+                  )}
+                  {isOwn(msg) && editingMessageId !== msg.id && (
+                    <span className="flex items-center justify-end gap-1 mt-1 clear-both">
+                      {msg.edited_at && (
+                        <span className="text-[10px] text-wa-muted italic">edited</span>
+                      )}
+                      <span className="text-[10px] text-wa-muted">{formatTime(msg.created_at)}</span>
+                      {activeRoom?.type !== 'public' && (
+                        <MessageReceipt
+                          status={getMessageReceiptStatus(
+                            msg,
+                            activeRoom,
+                            roomReads[activeRoom?.id],
+                            user?.id
+                          )}
+                        />
+                      )}
+                    </span>
+                  )}
+                  {!isOwn(msg) && msg.edited_at && editingMessageId !== msg.id && (
+                    <span className="block text-[10px] text-wa-muted text-right mt-0.5 italic">edited</span>
+                  )}
+                  {!isOwn(msg) && msg.grouped && (
                     <span className="block text-[10px] text-wa-muted text-right mt-0.5">{formatTime(msg.created_at)}</span>
                   )}
                 </div>
