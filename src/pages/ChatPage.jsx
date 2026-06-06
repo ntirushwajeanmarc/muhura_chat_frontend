@@ -37,6 +37,7 @@ import { fetchStarsFeed, deleteStar } from '../api/social';
 import StarsBar from '../components/StarsBar';
 import CreateStarModal from '../components/CreateStarModal';
 import ViewStarsModal from '../components/ViewStarsModal';
+import GroupProfileModal from '../components/GroupProfileModal';
 
 function roomLabel(room) {
   if (!room) return '';
@@ -54,7 +55,16 @@ function roomPrefix(room) {
 export default function ChatPage() {
   const { user, token, logout, updateSession } = useAuth();
   const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, markRead, on, connected, socket } = useSocket(token);
-  const { callState, startCall, acceptCall, rejectCall, endCall, remoteAudioRef } = useCall(socket, user);
+  const {
+    callState,
+    callError,
+    startCall,
+    acceptCall,
+    rejectCall,
+    endCall,
+    remoteAudioRef,
+    clearCallError,
+  } = useCall(socket, user, connected);
   const [publicRooms, setPublicRooms] = useState([]);
   const [directChats, setDirectChats] = useState([]);
   const [groupChats, setGroupChats] = useState([]);
@@ -85,6 +95,7 @@ export default function ChatPage() {
   const [starsFeed, setStarsFeed] = useState([]);
   const [showCreateStar, setShowCreateStar] = useState(false);
   const [viewingStars, setViewingStars] = useState(null);
+  const [showGroupProfile, setShowGroupProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
   const unreadStorageKey = user?.id ? `studychat_unread_${user.id}` : null;
@@ -666,10 +677,14 @@ export default function ChatPage() {
 
   const handleStartCall = async () => {
     if (!activeRoom?.peer) return;
+    if (!connected) {
+      clearCallError();
+      return;
+    }
     try {
       await startCall(activeRoom.peer, 'audio');
     } catch {
-      /* mic permission denied */
+      /* error shown in CallModal */
     }
   };
 
@@ -765,8 +780,8 @@ export default function ChatPage() {
       <button
         key={room.id}
         type="button"
-        className={`flex items-center gap-2.5 w-full p-2.5 rounded-lg text-left transition-colors ${
-          activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/60'
+        className={`flex items-center gap-3 w-full p-2.5 rounded-xl text-left transition-colors ${
+          activeRoom?.id === room.id ? 'bg-wa-accent/15 ring-1 ring-wa-accent/30' : 'hover:bg-wa-surface/70'
         }`}
         onClick={() => selectRoom(room)}
       >
@@ -877,8 +892,21 @@ export default function ChatPage() {
           onDelete={handleDeleteStar}
         />
       )}
+      {showGroupProfile && activeRoom?.type === 'group' && (
+        <GroupProfileModal
+          room={activeRoom}
+          onClose={() => setShowGroupProfile(false)}
+          onAddMembers={openAddMembers}
+          onViewProfile={(id) => {
+            setShowGroupProfile(false);
+            setProfileUserId(id);
+          }}
+        />
+      )}
       <CallModal
         callState={callState}
+        callError={callError}
+        onDismissError={clearCallError}
         onAccept={() => {
           if (callState?.status === 'incoming') {
             acceptCall({
@@ -905,8 +933,8 @@ export default function ChatPage() {
               ? 'fixed inset-0 z-30 w-full min-w-0'
               : 'hidden'
             : sidebarOpen
-              ? 'w-60 min-w-[240px]'
-              : 'w-14 min-w-[56px]'
+              ? 'w-[280px] lg:w-[320px] min-w-[280px]'
+              : 'w-16 min-w-[64px]'
         }`}
       >
         <div
@@ -952,27 +980,32 @@ export default function ChatPage() {
           />
         )}
 
-        <div className={`flex flex-col gap-1 shrink-0 border-b border-wa-border ${sidebarOpen ? 'p-2' : 'p-1'}`}>
-          <button
-            type="button"
-            className={`rounded-lg bg-wa-surface/80 hover:bg-wa-surface text-sm transition-colors ${
-              sidebarOpen ? 'w-full px-2.5 py-2 text-left' : 'w-10 h-10 mx-auto flex items-center justify-center text-lg'
-            }`}
-            onClick={() => setShowNewChat(true)}
-            title="New chat"
-          >
-            {sidebarOpen ? '💬 New chat' : '💬'}
-          </button>
-          <button
-            type="button"
-            className={`rounded-lg bg-wa-surface/80 hover:bg-wa-surface text-sm transition-colors ${
-              sidebarOpen ? 'w-full px-2.5 py-2 text-left' : 'w-10 h-10 mx-auto flex items-center justify-center text-lg'
-            }`}
-            onClick={() => setShowNewGroup(true)}
-            title="New group"
-          >
-            {sidebarOpen ? '👥 New group' : '👥'}
-          </button>
+        <div className={`shrink-0 border-b border-wa-border ${sidebarOpen || isMobile ? 'px-3 py-2.5' : 'p-1.5'}`}>
+          {sidebarOpen || isMobile ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
+                onClick={() => setShowNewChat(true)}
+              >
+                <span>💬</span>
+                <span>New chat</span>
+              </button>
+              <button
+                type="button"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
+                onClick={() => setShowNewGroup(true)}
+              >
+                <span>👥</span>
+                <span>Group</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border text-lg" onClick={() => setShowNewChat(true)} title="New chat">💬</button>
+              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border text-lg" onClick={() => setShowNewGroup(true)} title="New group">👥</button>
+            </div>
+          )}
         </div>
 
         {!sidebarOpen && (
@@ -986,71 +1019,60 @@ export default function ChatPage() {
         )}
 
         {sidebarOpen && (
-          <>
-            <div className="p-2 overflow-y-auto max-h-[28vh] shrink-0">
-              <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">CHATS</div>
-              {directChats.length === 0 && (
-                <p className="text-xs text-wa-muted px-2">Search someone to start chatting</p>
+          <div className="flex-1 overflow-y-auto min-h-0 px-2 py-1 sidebar-scroll">
+            <div className="mb-4">
+              <p className="section-label">Direct chats</p>
+              {directChats.length === 0 ? (
+                <p className="text-xs text-wa-muted px-2 py-1">No chats yet</p>
+              ) : (
+                sortedDirectChats.map((room) => renderChatItem(room))
               )}
-              {sortedDirectChats.map((room) => renderChatItem(room))}
             </div>
-
-            <div className="p-2 overflow-y-auto max-h-[28vh] shrink-0">
-              <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">GROUPS</div>
-              {groupChats.length === 0 && (
-                <p className="text-xs text-wa-muted px-2">Create a group to chat together</p>
+            <div className="mb-4">
+              <p className="section-label">Groups</p>
+              {groupChats.length === 0 ? (
+                <p className="text-xs text-wa-muted px-2 py-1">No groups yet</p>
+              ) : (
+                sortedGroupChats.map((room) => renderChatItem(room))
               )}
-              {sortedGroupChats.map((room) => renderChatItem(room))}
             </div>
-
-            <div className="p-2 overflow-y-auto max-h-[22vh] shrink-0">
-              <div className="flex items-center justify-between px-2 pb-2">
-                <div className="text-[11px] font-semibold text-wa-muted tracking-wider">CHANNELS</div>
+            <div className="mb-2">
+              <div className="flex items-center justify-between px-2 mb-1">
+                <p className="section-label mb-0">Channels</p>
                 <button
                   type="button"
-                  className="text-[11px] text-wa-accent hover:text-wa-accent-hover"
+                  className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
                   onClick={() => setShowChannelSearch(true)}
                 >
                   Find
                 </button>
               </div>
-              {sortedPublicRooms.length === 0 && (
-                <p className="text-xs text-wa-muted px-2">Search to find and join channels</p>
+              {sortedPublicRooms.length === 0 ? (
+                <p className="text-xs text-wa-muted px-2 py-1">Search to join channels</p>
+              ) : (
+                sortedPublicRooms.map((room) => {
+                  const unreadCount = unread[room.id] || 0;
+                  const hasUnread = unreadCount > 0;
+                  return (
+                    <button
+                      key={room.id}
+                      type="button"
+                      className={`flex items-center gap-3 w-full p-2.5 rounded-xl text-left transition-colors ${
+                        activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/70'
+                      }`}
+                      onClick={() => selectRoom(room)}
+                    >
+                      <span className="w-11 h-11 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
+                      <span className={`text-sm truncate flex-1 ${hasUnread ? 'font-bold text-slate-50' : 'font-medium text-slate-100'}`}>
+                        {room.name}
+                      </span>
+                      <UnreadBadge count={unreadCount} />
+                    </button>
+                  );
+                })
               )}
-              {sortedPublicRooms.map((room) => {
-                const unreadCount = unread[room.id] || 0;
-                const hasUnread = unreadCount > 0;
-                return (
-                  <button
-                    key={room.id}
-                    type="button"
-                    className={`flex items-center gap-2.5 w-full p-2.5 rounded-lg text-left transition-colors ${
-                      activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/60'
-                    }`}
-                    onClick={() => selectRoom(room)}
-                  >
-                    <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
-                    <span className={`text-sm truncate flex-1 ${hasUnread ? 'font-bold text-slate-50' : 'font-semibold text-slate-100'}`}>
-                      {room.name}
-                    </span>
-                    <UnreadBadge count={unreadCount} />
-                  </button>
-                );
-              })}
             </div>
-
-            <div className="flex-1 p-2 overflow-y-auto min-h-[60px]">
-              <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">
-                ONLINE — {onlineUsers.length}
-              </div>
-              {onlineUsers.map((u) => (
-                <div key={u} className="flex items-center gap-2 px-2.5 py-1.5 text-sm text-wa-muted">
-                  <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                  <span className="truncate">{u}</span>
-                </div>
-              ))}
-            </div>
-          </>
+          </div>
         )}
 
         <div
@@ -1132,32 +1154,42 @@ export default function ChatPage() {
               ←
             </button>
           )}
-          {headerAvatar && (
+          {activeRoom ? (
             <button
               type="button"
-              className="shrink-0 rounded-full hover:opacity-90"
-              onClick={() => openProfile(activeRoom.peer?.id)}
-              title="View profile"
+              className="flex items-center gap-2.5 min-w-0 flex-1 text-left hover:opacity-90 transition-opacity"
+              onClick={() => {
+                if (activeRoom.type === 'direct' && activeRoom.peer) openProfile(activeRoom.peer.id);
+                if (activeRoom.type === 'group') setShowGroupProfile(true);
+              }}
+              disabled={activeRoom.type === 'public'}
             >
-              {headerAvatar}
+              {activeRoom.type === 'direct' && headerAvatar}
+              {activeRoom.type === 'group' && (
+                <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">👥</span>
+              )}
+              {activeRoom.type === 'public' && (
+                <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
+              )}
+              <div className="min-w-0">
+                <p className="font-semibold text-sm sm:text-base truncate">
+                  {roomLabel(activeRoom)}
+                </p>
+                <p className="text-[11px] text-wa-muted truncate">
+                  {activeRoom.type === 'group' && `${activeRoom.member_count || '?'} members · tap for info`}
+                  {activeRoom.type === 'direct' && 'Tap for profile'}
+                  {activeRoom.type === 'public' && (
+                    `${activeRoom.description || 'Channel'}${onlineUsers.length > 0 ? ` · ${onlineUsers.length} online` : ''}`
+                  )}
+                </p>
+              </div>
             </button>
+          ) : (
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm sm:text-base text-wa-muted">Select a conversation</p>
+            </div>
           )}
-          <div className="flex items-center gap-1.5 font-semibold text-sm sm:text-base min-w-0 flex-1">
-            {activeRoom?.type === 'public' && <span className="text-wa-muted">#</span>}
-            {activeRoom?.type === 'group' && <span>👥</span>}
-            <span className="truncate">{roomLabel(activeRoom) || 'Select a chat'}</span>
-          </div>
-          {activeRoom?.type === 'group' && activeRoom.member_count && (
-            <span className="hidden sm:inline text-sm text-wa-muted border-l border-wa-border pl-3 shrink-0">
-              {activeRoom.member_count} members
-            </span>
-          )}
-          {activeRoom?.type === 'public' && activeRoom?.description && (
-            <span className="hidden md:inline text-sm text-wa-muted border-l border-wa-border pl-3 truncate">
-              {activeRoom.description}
-            </span>
-          )}
-          <div className="flex items-center gap-1 ml-auto shrink-0">
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
             {activeRoom?.type === 'direct' && activeRoom.peer && (
               <button
                 type="button"
@@ -1195,9 +1227,18 @@ export default function ChatPage() {
         </header>
 
         <div
-          className={`flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-0.5 overscroll-contain ${chatWallpaper}`}
+          className={`flex-1 overflow-y-auto overscroll-contain ${chatWallpaper} ${!activeRoom ? 'flex items-center justify-center' : ''}`}
           ref={messagesAreaRef}
         >
+          {!activeRoom && (
+            <div className="text-center px-6 max-w-sm">
+              <img src="/logo.png" alt="" className="w-20 h-20 mx-auto mb-4 opacity-80 object-contain" />
+              <p className="text-lg font-semibold text-slate-200">Welcome to EganirA</p>
+              <p className="text-sm text-wa-muted mt-2">Pick a chat from the sidebar or start a new conversation.</p>
+            </div>
+          )}
+          {activeRoom && (
+          <div className="w-full max-w-3xl lg:max-w-4xl mx-auto p-3 sm:p-5 flex flex-col gap-0.5 min-h-full">
           {loadingOlder && <p className="text-center text-sm text-wa-muted py-2">Loading older messages…</p>}
           {!loadingOlder && hasMoreOlder && messages.length > 0 && (
             <p className="text-center text-xs text-wa-muted py-2">Scroll up for older messages</p>
@@ -1355,9 +1396,11 @@ export default function ChatPage() {
             </div>
           )}
           <div ref={messagesEndRef} />
+          </div>
+          )}
         </div>
 
-        {replyingTo && (
+        {replyingTo && activeRoom && (
           <div className="flex items-start gap-3 px-3 sm:px-5 py-3 border-t border-wa-border bg-wa-panel shrink-0">
             <div className="flex-1 min-w-0 border-l-[3px] border-wa-accent pl-2.5 py-0.5">
               <span className="block text-xs font-semibold text-wa-accent-hover mb-1">
@@ -1379,7 +1422,7 @@ export default function ChatPage() {
         )}
 
         <form
-          className="flex items-end gap-2 px-3 sm:px-5 py-2.5 sm:py-3 border-t border-wa-border bg-wa-panel pb-safe"
+          className={`flex items-end gap-2 px-3 sm:px-5 py-2.5 sm:py-3 border-t border-wa-border bg-wa-panel pb-safe ${!activeRoom ? 'opacity-50 pointer-events-none' : ''}`}
           onSubmit={handleSend}
         >
           <input
