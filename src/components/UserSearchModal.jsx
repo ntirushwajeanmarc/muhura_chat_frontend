@@ -33,7 +33,14 @@ function userSubtitle(user, query) {
   return user.email || user.phone || null;
 }
 
-export default function UserSearchModal({ title, onSelect, onClose, multiSelect = false, onConfirm }) {
+export default function UserSearchModal({
+  title,
+  onSelect,
+  onClose,
+  multiSelect = false,
+  onConfirm,
+  excludeIds = [],
+}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -57,7 +64,8 @@ export default function UserSearchModal({ title, onSelect, onClose, multiSelect 
     const timer = setTimeout(async () => {
       try {
         const users = await searchUsers(trimmed);
-        setResults(users);
+        const excluded = new Set(excludeIds);
+        setResults(users.filter((u) => !excluded.has(u.id)));
       } catch {
         setResults([]);
       } finally {
@@ -65,7 +73,7 @@ export default function UserSearchModal({ title, onSelect, onClose, multiSelect 
       }
     }, 150);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, excludeIds]);
 
   const toggleUser = async (user) => {
     if (!multiSelect) {

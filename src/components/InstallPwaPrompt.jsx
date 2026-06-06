@@ -27,9 +27,9 @@ export default function InstallPwaPrompt() {
         {showIosHelp && isIos ? (
           <div className="p-4">
             <div className="flex items-start gap-3">
-              <img src="/favicon.png" alt="" className="w-12 h-12 rounded-xl shrink-0" />
+              <img src="/logo.png" alt="" className="w-12 h-12 rounded-xl shrink-0 object-contain" />
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-slate-100">Add StudyChat to Home Screen</p>
+                <p className="font-semibold text-slate-100">Add EganirA to Home Screen</p>
                 <ol className="mt-2 text-sm text-wa-muted space-y-1.5 list-decimal list-inside">
                   <li>Tap the Share button in Safari</li>
                   <li>Scroll down and tap &ldquo;Add to Home Screen&rdquo;</li>
@@ -57,9 +57,9 @@ export default function InstallPwaPrompt() {
         ) : (
           <div className="p-4">
             <div className="flex items-center gap-3">
-              <img src="/favicon.png" alt="" className="w-12 h-12 rounded-xl shrink-0" />
+              <img src="/logo.png" alt="" className="w-12 h-12 rounded-xl shrink-0 object-contain" />
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-slate-100 text-sm">Install StudyChat</p>
+                <p className="font-semibold text-slate-100 text-sm">Install EganirA</p>
                 <p className="text-xs text-wa-muted mt-0.5">
                   Add to your home screen for faster access and full-screen chat.
                 </p>

@@ -38,3 +38,5 @@ export const AVATAR_COLORS = [
   '#25d366', '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
   '#10b981', '#3b82f6', '#8b5cf6', '#ef4444',
 ];
+
+export const CHAT_WALLPAPERS = ['default', 'dark', 'teal', 'midnight', 'warm'];

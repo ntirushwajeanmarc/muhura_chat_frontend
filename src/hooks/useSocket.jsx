@@ -8,10 +8,12 @@ const joinedRooms = new Set();
 export const useSocket = (token) => {
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     if (!token) {
       setConnected(false);
+      setSocket(null);
       return undefined;
     }
 
@@ -27,13 +29,16 @@ export const useSocket = (token) => {
 
     socketInstance = socket;
     socketRef.current = socket;
+    setSocket(socket);
 
     const onConnect = () => {
       setConnected(true);
       joinedRooms.forEach((roomId) => socket.emit('join_room', roomId));
     };
 
-    const onDisconnect = () => setConnected(false);
+    const onDisconnect = () => {
+      setConnected(false);
+    };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -46,6 +51,7 @@ export const useSocket = (token) => {
       socketInstance = null;
       socketRef.current = null;
       setConnected(false);
+      setSocket(null);
     };
   }, [token]);
 
@@ -101,6 +107,6 @@ export const useSocket = (token) => {
     sendTyping,
     on,
     connected,
-    socket: socketRef.current,
+    socket,
   };
 };

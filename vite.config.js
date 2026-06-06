@@ -7,11 +7,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.png', 'chat_wallpaper.png'],
+      includeAssets: ['logo.png', 'favicon.png', 'chat_wallpaper.png'],
       manifest: {
-        name: 'StudyChat',
-        short_name: 'StudyChat',
-        description: 'Connect with your classmates',
+        name: 'EganirA',
+        short_name: 'EganirA',
+        description: 'Connect with your classmates on EganirA',
         theme_color: '#075e54',
         background_color: '#0b141a',
         display: 'standalone',
@@ -21,19 +21,19 @@ export default defineConfig({
         categories: ['social', 'education'],
         icons: [
           {
-            src: 'favicon.png',
+            src: 'logo.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'favicon.png',
+            src: 'logo.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'favicon.png',
+            src: 'logo.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

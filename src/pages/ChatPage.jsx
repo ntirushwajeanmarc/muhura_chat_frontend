@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { BACKEND_URL } from '../config';
 import { fetchRoomMessages } from '../api/messages';
-import { fetchChats, startDirectChat, createGroupChat } from '../api/chats';
+import { fetchChats, startDirectChat, createGroupChat, addGroupMembers, fetchGroupMembers } from '../api/chats';
 import { uploadFile } from '../api/attachments';
 import MessageContent from '../components/MessageContent';
 import MessageAttachment from '../components/MessageAttachment';
@@ -28,6 +28,11 @@ import {
   getNotificationPrefs,
 } from '../utils/notifications';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import { useCall } from '../hooks/useCall';
+import ChannelSearchModal from '../components/ChannelSearchModal';
+import WallpaperPicker from '../components/WallpaperPicker';
+import CallModal from '../components/CallModal';
+import { wallpaperClass } from '../utils/wallpapers';
 
 function roomLabel(room) {
   if (!room) return '';
@@ -43,8 +48,9 @@ function roomPrefix(room) {
 }
 
 export default function ChatPage() {
-  const { user, token, logout } = useAuth();
-  const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, markRead, on, connected } = useSocket(token);
+  const { user, token, logout, updateSession } = useAuth();
+  const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, markRead, on, connected, socket } = useSocket(token);
+  const { callState, startCall, acceptCall, rejectCall, endCall, remoteAudioRef } = useCall(socket, user);
   const [publicRooms, setPublicRooms] = useState([]);
   const [directChats, setDirectChats] = useState([]);
   const [groupChats, setGroupChats] = useState([]);
@@ -67,6 +73,10 @@ export default function ChatPage() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAddMembers, setShowAddMembers] = useState(false);
+  const [showChannelSearch, setShowChannelSearch] = useState(false);
+  const [showWallpaper, setShowWallpaper] = useState(false);
+  const [groupMemberIds, setGroupMemberIds] = useState([]);
   const [profileUserId, setProfileUserId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
@@ -147,7 +157,7 @@ export default function ChatPage() {
   );
 
   useEffect(() => {
-    document.title = totalUnread > 0 ? `(${totalUnread}) StudyChat` : 'StudyChat';
+    document.title = totalUnread > 0 ? `(${totalUnread}) EganirA` : 'EganirA';
   }, [totalUnread]);
 
   const findRoomById = useCallback((roomId) => {
@@ -272,6 +282,8 @@ export default function ChatPage() {
 
       if (chats.direct.length > 0) {
         setActiveRoom(chats.direct[0]);
+      } else if (chats.groups.length > 0) {
+        setActiveRoom(chats.groups[0]);
       } else if (unique.length > 0) {
         setActiveRoom(unique[0]);
       }
@@ -592,6 +604,53 @@ export default function ChatPage() {
     setShowNewGroup(false);
   };
 
+  const handleAddGroupMembers = async (selectedUsers) => {
+    if (!activeRoom?.id) return;
+    const memberIds = selectedUsers.map((u) => u.id);
+    const result = await addGroupMembers(activeRoom.id, memberIds);
+    setGroupChats((prev) =>
+      prev.map((r) =>
+        r.id === activeRoom.id ? { ...r, member_count: result.member_count } : r
+      )
+    );
+    setActiveRoom((prev) =>
+      prev?.id === activeRoom.id ? { ...prev, member_count: result.member_count } : prev
+    );
+    setShowAddMembers(false);
+  };
+
+  const handleChannelJoin = (room) => {
+    setPublicRooms((prev) => {
+      if (prev.find((r) => r.id === room.id)) return prev;
+      return [...prev, room];
+    });
+    joinRoom(room.id);
+    selectRoom(room);
+  };
+
+  const openAddMembers = async () => {
+    if (!activeRoom?.id) return;
+    try {
+      const members = await fetchGroupMembers(activeRoom.id);
+      setGroupMemberIds(members.map((m) => m.id));
+      setShowAddMembers(true);
+    } catch {
+      setGroupMemberIds([]);
+      setShowAddMembers(true);
+    }
+  };
+
+  const handleStartCall = async () => {
+    if (!activeRoom?.peer) return;
+    try {
+      await startCall(activeRoom.peer, 'audio');
+    } catch {
+      /* mic permission denied */
+    }
+  };
+
+  const chatWallpaper = wallpaperClass(user?.chat_wallpaper || 'default');
+
   const UnreadBadge = ({ count, className = '' }) => {
     if (!count) return null;
     return (
@@ -710,8 +769,58 @@ export default function ChatPage() {
           userId={profileUserId}
           onClose={() => setProfileUserId(null)}
           onEditProfile={() => setShowSettings(true)}
+          onCall={profileUserId !== user?.id ? async (profile) => {
+            try {
+              await startCall(profile, 'audio');
+            } catch {
+              /* mic denied */
+            }
+          } : undefined}
         />
       )}
+      {showAddMembers && (
+        <UserSearchModal
+          title="Add to group"
+          multiSelect
+          excludeIds={groupMemberIds}
+          onConfirm={handleAddGroupMembers}
+          onClose={() => setShowAddMembers(false)}
+        />
+      )}
+      {showChannelSearch && (
+        <ChannelSearchModal
+          onJoin={handleChannelJoin}
+          onClose={() => setShowChannelSearch(false)}
+        />
+      )}
+      {showWallpaper && (
+        <WallpaperPicker
+          current={user?.chat_wallpaper || 'default'}
+          updateSession={updateSession}
+          onSelect={() => {}}
+          onClose={() => setShowWallpaper(false)}
+        />
+      )}
+      <CallModal
+        callState={callState}
+        onAccept={() => {
+          if (callState?.status === 'incoming') {
+            acceptCall({
+              callId: callState.callId,
+              callType: callState.callType,
+              from: callState.peer,
+              sdp: callState.sdp,
+            });
+          }
+        }}
+        onReject={() => {
+          if (callState?.peer && callState?.callId) {
+            rejectCall({ from: callState.peer, callId: callState.callId });
+          }
+        }}
+        onEnd={endCall}
+        remoteAudioRef={remoteAudioRef}
+      />
 
       <aside
         className={`flex flex-col bg-wa-dark border-r border-wa-border transition-all duration-200 ${
@@ -731,8 +840,8 @@ export default function ChatPage() {
         >
           {sidebarOpen || isMobile ? (
             <>
-              <img src="/favicon.png" alt="" className="w-7 h-7 rounded-md shrink-0" />
-              <span className="font-bold text-sm truncate flex-1">StudyChat</span>
+              <img src="/logo.png" alt="" className="w-7 h-7 rounded-md shrink-0 object-contain" />
+              <span className="font-bold text-sm truncate flex-1">EganirA</span>
               {!isMobile && (
                 <button
                   type="button"
@@ -810,7 +919,19 @@ export default function ChatPage() {
             </div>
 
             <div className="p-2 overflow-y-auto max-h-[22vh] shrink-0">
-              <div className="text-[11px] font-semibold text-wa-muted tracking-wider px-2 pb-2">CHANNELS</div>
+              <div className="flex items-center justify-between px-2 pb-2">
+                <div className="text-[11px] font-semibold text-wa-muted tracking-wider">CHANNELS</div>
+                <button
+                  type="button"
+                  className="text-[11px] text-wa-accent hover:text-wa-accent-hover"
+                  onClick={() => setShowChannelSearch(true)}
+                >
+                  Find
+                </button>
+              </div>
+              {sortedPublicRooms.length === 0 && (
+                <p className="text-xs text-wa-muted px-2">Search to find and join channels</p>
+              )}
               {sortedPublicRooms.map((room) => {
                 const unreadCount = unread[room.id] || 0;
                 const hasUnread = unreadCount > 0;
@@ -951,10 +1072,45 @@ export default function ChatPage() {
               {activeRoom.description}
             </span>
           )}
+          <div className="flex items-center gap-1 ml-auto shrink-0">
+            {activeRoom?.type === 'direct' && activeRoom.peer && (
+              <button
+                type="button"
+                className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
+                onClick={handleStartCall}
+                title="Voice call"
+                aria-label="Voice call"
+              >
+                📞
+              </button>
+            )}
+            {activeRoom?.type === 'group' && (
+              <button
+                type="button"
+                className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
+                onClick={openAddMembers}
+                title="Add members"
+                aria-label="Add members"
+              >
+                ➕
+              </button>
+            )}
+            {activeRoom && (
+              <button
+                type="button"
+                className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
+                onClick={() => setShowWallpaper(true)}
+                title="Change wallpaper"
+                aria-label="Change wallpaper"
+              >
+                🖼
+              </button>
+            )}
+          </div>
         </header>
 
         <div
-          className="flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-0.5 chat-wallpaper overscroll-contain"
+          className={`flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-0.5 overscroll-contain ${chatWallpaper}`}
           ref={messagesAreaRef}
         >
           {loadingOlder && <p className="text-center text-sm text-wa-muted py-2">Loading older messages…</p>}

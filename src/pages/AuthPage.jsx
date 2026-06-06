@@ -32,8 +32,8 @@ export default function AuthPage() {
     <div className="min-h-full flex items-center justify-center chat-wallpaper bg-wa-dark px-4 py-6 sm:p-6">
       <div className="bg-wa-panel border border-wa-border rounded-2xl p-6 sm:p-10 w-full max-w-md shadow-2xl">
         <div className="text-center mb-7">
-          <img src="/favicon.png" alt="" className="w-16 h-16 rounded-2xl mx-auto mb-3" />
-          <h1 className="text-2xl font-bold text-slate-100">StudyChat</h1>
+          <img src="/logo.png" alt="" className="w-16 h-16 rounded-2xl mx-auto mb-3 object-contain" />
+          <h1 className="text-2xl font-bold text-slate-100">EganirA</h1>
           <p className="text-wa-muted text-sm mt-1">Connect with your classmates</p>
         </div>
 

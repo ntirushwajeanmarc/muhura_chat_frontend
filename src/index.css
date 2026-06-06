@@ -31,6 +31,33 @@
     background-position: center;
     background-attachment: fixed;
   }
+
+  .chat-wallpaper-dark {
+    background-color: #0b141a;
+    background-image: linear-gradient(135deg, #0b141a 0%, #1a2332 50%, #0b141a 100%);
+  }
+
+  .chat-wallpaper-teal {
+    background-color: #064e45;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(0, 168, 132, 0.15), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(6, 207, 156, 0.12), transparent 45%),
+      linear-gradient(180deg, #0b141a 0%, #075e54 100%);
+  }
+
+  .chat-wallpaper-midnight {
+    background-color: #0a0f1a;
+    background-image:
+      radial-gradient(ellipse at top, rgba(59, 130, 246, 0.12), transparent 55%),
+      linear-gradient(180deg, #0a0f1a 0%, #111827 100%);
+  }
+
+  .chat-wallpaper-warm {
+    background-color: #1a1410;
+    background-image:
+      radial-gradient(circle at 70% 30%, rgba(245, 158, 11, 0.1), transparent 40%),
+      linear-gradient(180deg, #1a1410 0%, #2d2419 100%);
+  }
 }
 
 @keyframes bounce-dot {

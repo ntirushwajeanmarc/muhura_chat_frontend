@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { fetchUserProfile, toggleProfileLike } from '../api/likes';
 import Avatar from './Avatar';
 
-export default function ProfileModal({ userId, onClose, onEditProfile }) {
+export default function ProfileModal({ userId, onClose, onEditProfile, onCall }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -98,18 +98,32 @@ export default function ProfileModal({ userId, onClose, onEditProfile }) {
                   Edit profile
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                    profile.liked_by_me
-                      ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 hover:bg-pink-500/30'
-                      : 'bg-wa-accent hover:bg-wa-accent-hover text-white'
-                  }`}
-                  onClick={handleLike}
-                  disabled={liking}
-                >
-                  {liking ? '…' : profile.liked_by_me ? '❤️ Liked' : '🤍 Like profile'}
-                </button>
+                <div className="w-full flex flex-col gap-2">
+                  {onCall && (
+                    <button
+                      type="button"
+                      className="w-full py-2.5 bg-wa-surface hover:bg-wa-border border border-wa-border rounded-lg text-slate-200 text-sm font-semibold"
+                      onClick={() => {
+                        onCall(profile);
+                        onClose();
+                      }}
+                    >
+                      📞 Voice call
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                      profile.liked_by_me
+                        ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 hover:bg-pink-500/30'
+                        : 'bg-wa-accent hover:bg-wa-accent-hover text-white'
+                    }`}
+                    onClick={handleLike}
+                    disabled={liking}
+                  >
+                    {liking ? '…' : profile.liked_by_me ? '❤️ Liked' : '🤍 Like profile'}
+                  </button>
+                </div>
               )}
             </>
           ) : null}

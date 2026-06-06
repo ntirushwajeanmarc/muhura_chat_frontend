@@ -51,8 +51,8 @@ export function showMessageNotification({ title, body, roomId, onClick }) {
   if (canNotify()) {
     const notification = new Notification(title, {
       body,
-      icon: '/favicon.png',
-      badge: '/favicon.png',
+      icon: '/logo.png',
+      badge: '/logo.png',
       tag: `room-${roomId}`,
     });
     notification.onclick = () => {
