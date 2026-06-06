@@ -80,7 +80,7 @@ async function handlePush(event) {
         url: data.url || '/',
       },
       silent: false,
-      renotify: true,
+      renotify: isCall,
     };
 
     if (isCall) {
