@@ -38,7 +38,7 @@ export default function ChatWallpaper({ user, scrollClassName = '', children, in
           src={customUrl}
           alt=""
           aria-hidden
-          className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-center"
+          className="chat-wallpaper-custom-img pointer-events-none absolute inset-0 h-full w-full select-none"
         />
       )}
       <div

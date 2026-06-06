@@ -62,6 +62,12 @@
   .chat-wallpaper-custom {
     background-color: #0b141a;
   }
+
+  /* Gallery photos: show the full image (contain), not cropped zoom (cover) */
+  .chat-wallpaper-custom-img {
+    object-fit: contain;
+    object-position: center;
+  }
 }
 
 @keyframes bounce-dot {
