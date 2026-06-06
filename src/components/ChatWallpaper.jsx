@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { wallpaperClass } from '../utils/wallpapers';
 import { fetchAuthenticatedBlob } from '../utils/fileDownload';
 
-export default function ChatWallpaper({ user, className = '', children, innerRef }) {
+export default function ChatWallpaper({ user, scrollClassName = '', children, innerRef }) {
   const [customUrl, setCustomUrl] = useState(null);
   const isCustom = user?.chat_wallpaper === 'custom';
 
@@ -30,18 +30,23 @@ export default function ChatWallpaper({ user, className = '', children, innerRef
   }, [isCustom, user?.id]);
 
   const presetClass = !isCustom ? wallpaperClass(user?.chat_wallpaper || 'default') : 'chat-wallpaper-custom';
-  const style = isCustom && customUrl
-    ? {
-        backgroundImage: `url(${customUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'fixed',
-      }
-    : undefined;
 
   return (
-    <div ref={innerRef} className={`${presetClass} ${className}`} style={style}>
-      {children}
+    <div className={`relative flex-1 min-h-0 flex flex-col ${presetClass}`}>
+      {isCustom && customUrl && (
+        <img
+          src={customUrl}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-center"
+        />
+      )}
+      <div
+        ref={innerRef}
+        className={`relative z-[1] flex-1 min-h-0 overflow-y-auto overscroll-contain ${scrollClassName}`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

@@ -1573,7 +1573,7 @@ export default function ChatPage() {
         <ChatWallpaper
           user={user}
           innerRef={messagesAreaRef}
-          className={`flex-1 overflow-y-auto overscroll-contain ${!activeRoom ? 'flex items-center justify-center' : ''}`}
+          scrollClassName={!activeRoom ? 'flex items-center justify-center' : ''}
         >
           {!activeRoom && (
             <div className="text-center px-6 max-w-sm">
