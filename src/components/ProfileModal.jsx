@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchUserProfile, toggleProfileLike } from '../api/likes';
+import { toggleFollow } from '../api/social';
 import Avatar from './Avatar';
 
 export default function ProfileModal({ userId, onClose, onEditProfile, onCall }) {
@@ -8,6 +9,7 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [liking, setLiking] = useState(false);
+  const [following, setFollowing] = useState(false);
   const [error, setError] = useState('');
 
   const isOwn = user?.id === userId;
@@ -20,6 +22,23 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
       .catch(() => setError('Could not load profile'))
       .finally(() => setLoading(false));
   }, [userId]);
+
+  const handleFollow = async () => {
+    if (isOwn || following) return;
+    setFollowing(true);
+    try {
+      const data = await toggleFollow(userId);
+      setProfile((prev) => ({
+        ...prev,
+        followed_by_me: data.following,
+        follower_count: data.follower_count,
+      }));
+    } catch {
+      setError('Could not update follow');
+    } finally {
+      setFollowing(false);
+    }
+  };
 
   const handleLike = async () => {
     if (isOwn || liking) return;
@@ -80,10 +99,18 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
               {profile.phone && (
                 <p className="text-sm text-wa-muted">📱 {profile.phone}</p>
               )}
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex items-center gap-4 pt-2 flex-wrap justify-center">
+                <span className="text-sm text-wa-muted">
+                  <span className="font-semibold text-slate-200">{profile.follower_count || 0}</span>
+                  {' '}followers
+                </span>
+                <span className="text-sm text-wa-muted">
+                  <span className="font-semibold text-slate-200">{profile.following_count || 0}</span>
+                  {' '}following
+                </span>
                 <span className="text-sm text-wa-muted">
                   <span className="font-semibold text-pink-400">{profile.like_count || 0}</span>
-                  {' '}profile {profile.like_count === 1 ? 'like' : 'likes'}
+                  {' '}likes
                 </span>
               </div>
               {isOwn ? (
@@ -99,6 +126,18 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
                 </button>
               ) : (
                 <div className="w-full flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                      profile.followed_by_me
+                        ? 'bg-wa-surface text-wa-muted border border-wa-border hover:text-slate-200'
+                        : 'bg-sky-600 hover:bg-sky-500 text-white'
+                    }`}
+                    onClick={handleFollow}
+                    disabled={following}
+                  >
+                    {following ? '…' : profile.followed_by_me ? '✓ Following' : '+ Follow'}
+                  </button>
                   {onCall && (
                     <button
                       type="button"

@@ -33,6 +33,10 @@ import ChannelSearchModal from '../components/ChannelSearchModal';
 import WallpaperPicker from '../components/WallpaperPicker';
 import CallModal from '../components/CallModal';
 import { wallpaperClass } from '../utils/wallpapers';
+import { fetchStarsFeed, deleteStar } from '../api/social';
+import StarsBar from '../components/StarsBar';
+import CreateStarModal from '../components/CreateStarModal';
+import ViewStarsModal from '../components/ViewStarsModal';
 
 function roomLabel(room) {
   if (!room) return '';
@@ -78,6 +82,9 @@ export default function ChatPage() {
   const [showWallpaper, setShowWallpaper] = useState(false);
   const [groupMemberIds, setGroupMemberIds] = useState([]);
   const [profileUserId, setProfileUserId] = useState(null);
+  const [starsFeed, setStarsFeed] = useState([]);
+  const [showCreateStar, setShowCreateStar] = useState(false);
+  const [viewingStars, setViewingStars] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
   const unreadStorageKey = user?.id ? `studychat_unread_${user.id}` : null;
@@ -105,6 +112,19 @@ export default function ChatPage() {
   useEffect(() => {
     requestNotificationPermission();
   }, []);
+
+  const loadStarsFeed = useCallback(async () => {
+    try {
+      const feed = await fetchStarsFeed();
+      setStarsFeed(feed);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStarsFeed();
+  }, [loadStarsFeed]);
 
   useEffect(() => {
     if (isMobile) setSidebarOpen(true);
@@ -424,6 +444,9 @@ export default function ChatPage() {
         },
       }));
     });
+    const offStar = on('star_posted', () => {
+      loadStarsFeed();
+    });
     return () => {
       offMsg?.();
       offRoom?.();
@@ -432,8 +455,9 @@ export default function ChatPage() {
       offEdited?.();
       offLike?.();
       offRead?.();
+      offStar?.();
     };
-  }, [connected, on, refreshChats, openRoomById, joinRoom]);
+  }, [connected, on, refreshChats, openRoomById, joinRoom, loadStarsFeed]);
 
   useEffect(() => {
     if (stickToBottomRef.current) {
@@ -651,6 +675,44 @@ export default function ChatPage() {
 
   const chatWallpaper = wallpaperClass(user?.chat_wallpaper || 'default');
 
+  const handleStarPosted = (star) => {
+    setStarsFeed((prev) => {
+      const next = [...prev];
+      const meIdx = next.findIndex((item) => item.is_me);
+      const meUser = {
+        id: user.id,
+        username: user.username,
+        surname: user.surname || null,
+        avatar_color: user.avatar_color,
+        avatar_url: user.avatar_url || null,
+      };
+      if (meIdx >= 0) {
+        next[meIdx] = {
+          ...next[meIdx],
+          stars: [...(next[meIdx].stars || []), star],
+        };
+      } else {
+        next.unshift({
+          user: meUser,
+          is_me: true,
+          followed_by_me: true,
+          stars: [star],
+        });
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteStar = async (starId) => {
+    try {
+      await deleteStar(starId);
+      setViewingStars(null);
+      loadStarsFeed();
+    } catch {
+      /* ignore */
+    }
+  };
+
   const UnreadBadge = ({ count, className = '' }) => {
     if (!count) return null;
     return (
@@ -801,6 +863,20 @@ export default function ChatPage() {
           onClose={() => setShowWallpaper(false)}
         />
       )}
+      {showCreateStar && (
+        <CreateStarModal
+          onPosted={handleStarPosted}
+          onClose={() => setShowCreateStar(false)}
+        />
+      )}
+      {viewingStars && (
+        <ViewStarsModal
+          feedItem={viewingStars}
+          viewerId={user?.id}
+          onClose={() => setViewingStars(null)}
+          onDelete={handleDeleteStar}
+        />
+      )}
       <CallModal
         callState={callState}
         onAccept={() => {
@@ -866,6 +942,15 @@ export default function ChatPage() {
             </button>
           )}
         </div>
+
+        {(sidebarOpen || isMobile) && (
+          <StarsBar
+            feed={starsFeed}
+            viewerId={user?.id}
+            onCreate={() => setShowCreateStar(true)}
+            onViewUser={setViewingStars}
+          />
+        )}
 
         <div className={`flex flex-col gap-1 shrink-0 border-b border-wa-border ${sidebarOpen ? 'p-2' : 'p-1'}`}>
           <button
@@ -1136,32 +1221,27 @@ export default function ChatPage() {
                   <span className="text-[11px] text-wa-muted">{formatTime(msg.created_at)}</span>
                 </div>
               )}
-              <div className={`flex ${isOwn(msg) ? 'justify-end' : ''} ${!isOwn(msg) && !msg.grouped ? 'pl-[42px]' : ''} ${!isOwn(msg) && msg.grouped ? 'pl-[42px]' : ''}`}>
+              <div className={`flex ${isOwn(msg) ? 'justify-end' : ''} ${!isOwn(msg) ? 'pl-[42px]' : ''}`}>
                 <div
-                  className={`relative inline-block max-w-[min(88%,520px)] sm:max-w-[min(75%,520px)] md:max-w-[min(65%,520px)] text-sm leading-relaxed shadow-sm ${
+                  className={`inline-block max-w-[min(92%,520px)] sm:max-w-[min(80%,520px)] md:max-w-[min(65%,520px)] text-sm leading-relaxed shadow-sm min-w-0 ${
                     isOwn(msg)
-                      ? 'bg-wa-bubble rounded-lg rounded-br-sm pl-3.5 pr-14 py-2'
-                      : 'bg-wa-surface rounded-lg rounded-bl-sm pl-3.5 pr-14 py-2'
+                      ? 'bg-wa-bubble rounded-lg rounded-br-sm px-3 py-2.5'
+                      : 'bg-wa-surface rounded-lg rounded-bl-sm px-3 py-2.5'
                   }`}
                 >
-                  <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-55 hover:opacity-100 transition-opacity">
-                    <ReplyButton onClick={() => startReply(msg)} />
-                    {isOwn(msg) && editingMessageId !== msg.id && (
-                      <EditButton onClick={() => startEdit(msg)} />
-                    )}
-                    {msg.content && editingMessageId !== msg.id && (
-                      <CopyButton text={msg.content} title="Copy message" />
-                    )}
-                  </div>
                   {msg.reply_to && (
-                    <div className="flex flex-col gap-0.5 mb-1.5 p-1.5 border-l-[3px] border-wa-accent rounded bg-black/20 text-xs">
+                    <div className="flex flex-col gap-0.5 mb-2 p-2 border-l-[3px] border-wa-accent rounded bg-black/20 text-xs max-w-full">
                       <span className="font-semibold text-wa-accent-hover">@{msg.reply_to.username}</span>
-                      <span className="text-wa-muted truncate">{truncateReply(msg.reply_to.content)}</span>
+                      <span className="text-wa-muted break-words line-clamp-3">{truncateReply(msg.reply_to.content)}</span>
                     </div>
                   )}
-                  {msg.attachment && <MessageAttachment attachment={msg.attachment} />}
+                  {msg.attachment && (
+                    <div className={`${msg.content || msg.reply_to ? 'mb-2' : ''}`}>
+                      <MessageAttachment attachment={msg.attachment} />
+                    </div>
+                  )}
                   {editingMessageId === msg.id ? (
-                    <div className="flex flex-col gap-2 min-w-[200px] pr-2">
+                    <div className="flex flex-col gap-2 min-w-[200px]">
                       <textarea
                         value={editDraft}
                         onChange={(e) => setEditDraft(e.target.value)}
@@ -1190,10 +1270,35 @@ export default function ChatPage() {
                       </div>
                     </div>
                   ) : (
-                    msg.content && <MessageContent content={msg.content} />
+                    msg.content && (
+                      <div className="break-words min-w-0">
+                        <MessageContent content={msg.content} />
+                      </div>
+                    )
                   )}
                   {editingMessageId !== msg.id && (
-                    <div className={`mt-1 ${isOwn(msg) ? 'flex justify-end' : ''}`}>
+                    <div className="flex items-center justify-end gap-0.5 mt-2 pt-2 border-t border-white/10">
+                      <ReplyButton
+                        onClick={() => startReply(msg)}
+                        className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-white/10 transition-colors"
+                      />
+                      {isOwn(msg) && (
+                        <EditButton
+                          onClick={() => startEdit(msg)}
+                          className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-white/10 transition-colors"
+                        />
+                      )}
+                      {msg.content && (
+                        <CopyButton
+                          text={msg.content}
+                          title="Copy message"
+                          className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-white/10 transition-colors"
+                        />
+                      )}
+                    </div>
+                  )}
+                  {editingMessageId !== msg.id && (
+                    <div className={`flex items-center gap-2 mt-1.5 ${isOwn(msg) ? 'justify-end' : 'justify-start'}`}>
                       <MessageLikeButton
                         messageId={msg.id}
                         likes={msg.likes || { count: 0, liked_by_me: false }}
@@ -1202,11 +1307,11 @@ export default function ChatPage() {
                     </div>
                   )}
                   {isOwn(msg) && editingMessageId !== msg.id && (
-                    <span className="flex items-center justify-end gap-1 mt-1 clear-both">
+                    <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-0.5">
                       {msg.edited_at && (
-                        <span className="text-[10px] text-wa-muted italic">edited</span>
+                        <span className="text-[10px] text-wa-muted italic shrink-0">edited</span>
                       )}
-                      <span className="text-[10px] text-wa-muted">{formatTime(msg.created_at)}</span>
+                      <span className="text-[10px] text-wa-muted shrink-0">{formatTime(msg.created_at)}</span>
                       {activeRoom?.type !== 'public' && (
                         <MessageReceipt
                           status={getMessageReceiptStatus(
@@ -1217,13 +1322,13 @@ export default function ChatPage() {
                           )}
                         />
                       )}
-                    </span>
+                    </div>
                   )}
                   {!isOwn(msg) && msg.edited_at && editingMessageId !== msg.id && (
-                    <span className="block text-[10px] text-wa-muted text-right mt-0.5 italic">edited</span>
+                    <span className="block text-[10px] text-wa-muted text-right mt-1 italic">edited</span>
                   )}
                   {!isOwn(msg) && msg.grouped && (
-                    <span className="block text-[10px] text-wa-muted text-right mt-0.5">{formatTime(msg.created_at)}</span>
+                    <span className="block text-[10px] text-wa-muted text-right mt-1">{formatTime(msg.created_at)}</span>
                   )}
                 </div>
               </div>
@@ -1253,14 +1358,18 @@ export default function ChatPage() {
         </div>
 
         {replyingTo && (
-          <div className="flex items-center gap-3 px-3 sm:px-5 py-2.5 border-t border-wa-border bg-wa-panel">
-            <div className="flex-1 min-w-0 border-l-[3px] border-wa-accent pl-2.5">
-              <span className="block text-xs font-semibold text-wa-accent-hover">Replying to @{replyingTo.username}</span>
-              <span className="block text-sm text-wa-muted truncate">{truncateReply(replyingTo.content, 120)}</span>
+          <div className="flex items-start gap-3 px-3 sm:px-5 py-3 border-t border-wa-border bg-wa-panel shrink-0">
+            <div className="flex-1 min-w-0 border-l-[3px] border-wa-accent pl-2.5 py-0.5">
+              <span className="block text-xs font-semibold text-wa-accent-hover mb-1">
+                Replying to @{replyingTo.username}
+              </span>
+              <span className="block text-sm text-wa-muted break-words line-clamp-2">
+                {truncateReply(replyingTo.content, 120)}
+              </span>
             </div>
             <button
               type="button"
-              className="w-7 h-7 rounded-md bg-wa-surface text-wa-muted hover:text-slate-200"
+              className="touch-target w-9 h-9 shrink-0 rounded-md bg-wa-surface text-wa-muted hover:text-slate-200 flex items-center justify-center"
               onClick={() => setReplyingTo(null)}
               aria-label="Cancel reply"
             >

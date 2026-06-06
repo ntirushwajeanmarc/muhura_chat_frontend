@@ -40,7 +40,7 @@ export default function MessageAttachment({ attachment }) {
         <AuthenticatedImage
           storedPath={attachment.url}
           alt={attachment.name || 'Shared image'}
-          className="max-w-full max-h-72 rounded-md object-contain"
+          className="max-w-full max-h-48 sm:max-h-72 rounded-md object-contain"
         />
         <button
           type="button"
