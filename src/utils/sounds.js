@@ -1,4 +1,5 @@
 import { getNotificationPrefs } from './notifications';
+import { getCallSettings } from './callSettings';
 
 let messageAudio;
 let ringAudio;
@@ -46,13 +47,16 @@ export function playMessageAlert() {
   if (!prefs.enabled || !prefs.sound) return;
   const audio = getMessageAudio();
   if (!audio) return;
+  audio.volume = 0.7;
   audio.currentTime = 0;
   audio.play().catch(() => {});
 }
 
-export function playCallAlert() {
+export function playCallAlert({ outgoing = false } = {}) {
   const audio = getRingAudio();
   if (!audio) return;
+  const { ringVolume } = getCallSettings();
+  audio.volume = outgoing ? ringVolume * 0.35 : ringVolume;
   audio.currentTime = 0;
   audio.play().catch(() => {});
 }

@@ -10,6 +10,7 @@ import {
   requestNotificationPermission,
 } from '../utils/notifications';
 import { ensurePushSubscription } from '../utils/pushSubscription';
+import { getCallSettings, setCallSettings } from '../utils/callSettings';
 
 const inputClass =
   'w-full px-3.5 py-2.5 bg-wa-surface border border-wa-border rounded-lg text-slate-100 text-sm outline-none focus:border-wa-accent';
@@ -33,6 +34,7 @@ export default function SettingsModal({ onClose }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [notifPrefs, setNotifPrefs] = useState(getNotificationPrefs());
+  const [callPrefs, setCallPrefs] = useState(getCallSettings());
   const [notifPermission, setNotifPermission] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
   );
@@ -304,6 +306,43 @@ export default function SettingsModal({ onClose }) {
                       Notifications on — you will hear alerts even when EganirA is in the background
                     </p>
                   )}
+                </div>
+              </div>
+
+              <div className="border-t border-wa-border pt-4">
+                <label className="block text-xs font-medium text-wa-muted mb-3">Calls</label>
+                <div className="flex flex-col gap-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-wa-accent"
+                      checked={callPrefs.defaultSpeaker}
+                      onChange={(e) => {
+                        const next = setCallSettings({ defaultSpeaker: e.target.checked, speakerOn: e.target.checked });
+                        setCallPrefs(next);
+                      }}
+                    />
+                    <span className="text-sm">Use speaker by default</span>
+                  </label>
+                  <div>
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span>Ringtone volume</span>
+                      <span className="text-wa-muted text-xs">{Math.round(callPrefs.ringVolume * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.15"
+                      max="0.85"
+                      step="0.05"
+                      value={callPrefs.ringVolume}
+                      className="w-full accent-wa-accent"
+                      onChange={(e) => {
+                        const next = setCallSettings({ ringVolume: parseFloat(e.target.value) });
+                        setCallPrefs(next);
+                      }}
+                    />
+                    <p className="text-xs text-wa-muted mt-1.5">Soft chime — lower is gentler</p>
+                  </div>
                 </div>
               </div>
 

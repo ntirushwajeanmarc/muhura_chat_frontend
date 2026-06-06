@@ -8,6 +8,24 @@ const STATUS_LABEL = {
   active: 'On call',
 };
 
+function CallControlButton({ active, label, onClick, children, variant = 'default' }) {
+  const base = 'flex flex-col items-center gap-1.5 min-w-[72px]';
+  const btnClass = variant === 'danger'
+    ? 'w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-xl shadow-lg transition-colors'
+    : active
+      ? 'w-14 h-14 rounded-full bg-wa-accent text-white flex items-center justify-center text-xl shadow-lg transition-colors'
+      : 'w-14 h-14 rounded-full bg-wa-surface hover:bg-wa-border text-slate-200 flex items-center justify-center text-xl border border-wa-border transition-colors';
+
+  return (
+    <div className={base}>
+      <button type="button" className={btnClass} onClick={onClick} aria-label={label}>
+        {children}
+      </button>
+      <span className="text-[11px] text-wa-muted">{label}</span>
+    </div>
+  );
+}
+
 export default function CallModal({
   callState,
   callError,
@@ -16,6 +34,10 @@ export default function CallModal({
   onEnd,
   onDismissError,
   remoteAudioRef,
+  isMuted,
+  speakerOn,
+  onToggleMute,
+  onToggleSpeaker,
 }) {
   if (!callState && !callError) return null;
 
@@ -41,53 +63,71 @@ export default function CallModal({
   const isActive = status === 'active';
   const isOutgoing = status === 'calling' || status === 'ringing';
   const label = STATUS_LABEL[status] || 'Calling…';
+  const showControls = isActive || isIncoming;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] bg-gradient-to-b from-wa-dark/95 to-black/95 flex items-center justify-center p-4">
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-      <div className="bg-wa-panel border border-wa-border rounded-2xl w-full max-w-sm p-8 text-center shadow-2xl">
+      <div className="w-full max-w-sm text-center">
         <div className={`relative inline-block ${isOutgoing ? 'animate-pulse-ring' : ''}`}>
           <Avatar
             username={peer?.username || '?'}
             color={peer?.avatar_color}
             avatarUrl={peer?.avatar_url}
-            size={88}
+            size={96}
           />
         </div>
-        <p className="mt-5 text-xl font-semibold text-slate-100">{peer?.username}</p>
-        <p className="text-sm text-wa-accent mt-2 font-medium">{label}</p>
+        <p className="mt-6 text-2xl font-semibold text-slate-50 tracking-tight">{peer?.username}</p>
+        <p className="text-sm text-wa-accent/90 mt-2 font-medium">{label}</p>
         {isOutgoing && (
           <p className="text-xs text-wa-muted mt-1">Waiting for them to answer…</p>
         )}
+        {isActive && (
+          <p className="text-xs text-wa-muted mt-1">
+            {callType === 'video' ? 'Video call' : 'Voice call'}
+            {speakerOn ? ' · Speaker' : ' · Earpiece'}
+          </p>
+        )}
         {callError && <p className="text-xs text-red-400 mt-2">{callError}</p>}
 
-        <div className="flex gap-3 justify-center mt-8">
+        {showControls && (
+          <div className="flex justify-center gap-6 mt-10">
+            {isActive && (
+              <>
+                <CallControlButton
+                  active={isMuted}
+                  label={isMuted ? 'Unmute' : 'Mute'}
+                  onClick={onToggleMute}
+                >
+                  {isMuted ? '🔇' : '🎤'}
+                </CallControlButton>
+                <CallControlButton
+                  active={speakerOn}
+                  label={speakerOn ? 'Speaker' : 'Earpiece'}
+                  onClick={onToggleSpeaker}
+                >
+                  {speakerOn ? '🔊' : '📱'}
+                </CallControlButton>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className={`flex gap-4 justify-center ${showControls && isActive ? 'mt-8' : 'mt-10'}`}>
           {isIncoming && (
             <>
-              <button
-                type="button"
-                onClick={onReject}
-                className="px-6 py-3.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium min-w-[100px]"
-              >
-                Decline
-              </button>
-              <button
-                type="button"
-                onClick={onAccept}
-                className="px-6 py-3.5 rounded-full bg-wa-accent hover:bg-wa-accent-hover text-white text-sm font-medium min-w-[100px]"
-              >
-                Accept
-              </button>
+              <CallControlButton label="Decline" onClick={onReject} variant="danger">
+                ✕
+              </CallControlButton>
+              <CallControlButton label="Accept" onClick={onAccept} active>
+                ✓
+              </CallControlButton>
             </>
           )}
           {(isOutgoing || isActive) && (
-            <button
-              type="button"
-              onClick={onEnd}
-              className="px-8 py-3.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium"
-            >
-              {isActive ? 'End call' : 'Cancel'}
-            </button>
+            <CallControlButton label={isActive ? 'End' : 'Cancel'} onClick={onEnd} variant="danger">
+              📞
+            </CallControlButton>
           )}
         </div>
       </div>

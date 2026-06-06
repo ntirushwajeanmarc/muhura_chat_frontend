@@ -86,10 +86,14 @@ export default function ChatPage() {
   const {
     callState,
     callError,
+    isMuted,
+    speakerOn,
     startCall,
     acceptCall,
     rejectCall,
     endCall,
+    toggleMute,
+    toggleSpeaker,
     remoteAudioRef,
     clearCallError,
   } = useCall(socket, user, connected);
@@ -992,6 +996,10 @@ export default function ChatPage() {
       <CallModal
         callState={callState}
         callError={callError}
+        isMuted={isMuted}
+        speakerOn={speakerOn}
+        onToggleMute={toggleMute}
+        onToggleSpeaker={toggleSpeaker}
         onDismissError={clearCallError}
         onAccept={() => {
           if (callState?.status === 'incoming') {
