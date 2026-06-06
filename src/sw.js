@@ -52,31 +52,44 @@ async function handlePush(event) {
   }
 
   const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const hasVisibleClient = clients.some((client) => client.visibilityState === 'visible');
-  if (hasVisibleClient) return;
+  const hasHiddenClient = clients.some((client) => client.visibilityState === 'hidden');
+  const isCall = data.type === 'call';
 
-  const options = {
-    body: data.body,
-    icon: '/logo.png',
-    badge: '/logo.png',
-    tag: data.type === 'call' ? `call-${data.callId}` : `room-${data.roomId}`,
-    data: {
-      type: data.type,
+  for (const client of clients) {
+    client.postMessage({
+      type: 'eganira_alert',
+      playSound: true,
+      alertType: data.type,
       roomId: data.roomId,
       callId: data.callId,
-      fromUserId: data.fromUserId,
-      url: data.url || '/',
-    },
-    silent: false,
-    renotify: true,
-  };
-
-  if (data.type === 'call') {
-    options.requireInteraction = true;
-    options.vibrate = data.vibrate || [300, 100, 300, 100, 300, 100, 600];
+    });
   }
 
-  await self.registration.showNotification(data.title, options);
+  // Show OS notification when app is closed, backgrounded, or for incoming calls
+  if (clients.length === 0 || hasHiddenClient || isCall) {
+    const options = {
+      body: data.body,
+      icon: '/logo.png',
+      badge: '/logo.png',
+      tag: isCall ? `call-${data.callId}` : `room-${data.roomId}`,
+      data: {
+        type: data.type,
+        roomId: data.roomId,
+        callId: data.callId,
+        fromUserId: data.fromUserId,
+        url: data.url || '/',
+      },
+      silent: false,
+      renotify: true,
+    };
+
+    if (isCall) {
+      options.requireInteraction = true;
+      options.vibrate = data.vibrate || [300, 100, 300, 100, 300, 100, 600];
+    }
+
+    await self.registration.showNotification(data.title, options);
+  }
 }
 
 self.addEventListener('notificationclick', (event) => {

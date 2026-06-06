@@ -2,47 +2,36 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App';
-import {
-  setPwaUpdateHandler,
-  notifyPwaUpdateAvailable,
-} from './utils/pwaUpdate';
 import { setupPushNotifications } from './utils/pushSubscription';
+import { unlockSounds, handleServiceWorkerAlert } from './utils/sounds';
 
-const UPDATE_CHECK_MS = 15 * 60 * 1000;
-const MIN_UPDATE_INTERVAL_MS = 60 * 1000;
-let lastUpdateCheck = 0;
+const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
-function checkForSwUpdate(registration) {
-  const now = Date.now();
-  if (now - lastUpdateCheck < MIN_UPDATE_INTERVAL_MS) return;
-  lastUpdateCheck = now;
-  registration.update();
+// Unlock audio on first tap (required on mobile)
+['click', 'touchstart', 'keydown'].forEach((event) => {
+  document.addEventListener(event, unlockSounds, { once: true, passive: true });
+});
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'eganira_alert') {
+      handleServiceWorkerAlert(event.data);
+    }
+  });
 }
 
-const updateSW = registerSW({
+registerSW({
   immediate: true,
-  onNeedRefresh() {
-    notifyPwaUpdateAvailable();
-  },
   onRegisteredSW(_swUrl, registration) {
     if (!registration) return;
-
     setupPushNotifications(registration);
-
-    setInterval(() => checkForSwUpdate(registration), UPDATE_CHECK_MS);
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        checkForSwUpdate(registration);
-      }
-    });
+    // Check for updates in the background; new version applies on next app restart
+    setInterval(() => registration.update(), UPDATE_CHECK_MS);
   },
   onRegisterError(error) {
     console.error('Service worker registration failed:', error);
   },
 });
-
-setPwaUpdateHandler(updateSW);
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

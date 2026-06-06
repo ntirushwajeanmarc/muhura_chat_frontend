@@ -4,7 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { BACKEND_URL } from '../config';
 import { fetchRoomMessages } from '../api/messages';
-import { fetchChats, startDirectChat, createGroupChat, addGroupMembers, fetchGroupMembers } from '../api/chats';
+import {
+  fetchChats,
+  fetchUnreadCounts,
+  startDirectChat,
+  createGroupChat,
+  addGroupMembers,
+  fetchGroupMembers,
+} from '../api/chats';
 import { uploadFile } from '../api/attachments';
 import MessageContent from '../components/MessageContent';
 import MessageAttachment from '../components/MessageAttachment';
@@ -101,9 +108,7 @@ export default function ChatPage() {
   const [showGroupProfile, setShowGroupProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
-  const unreadStorageKey = user?.id ? `studychat_unread_${user.id}` : null;
   const [unread, setUnread] = useState({});
-  const unreadLoadedRef = useRef(false);
   const messagesAreaRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -114,6 +119,7 @@ export default function ChatPage() {
   const activeRoomIdRef = useRef(null);
   const userRef = useRef(user);
   const allRoomsRef = useRef([]);
+  const hadSocketConnectionRef = useRef(false);
 
   useEffect(() => {
     userRef.current = user;
@@ -145,21 +151,25 @@ export default function ChatPage() {
     if (isMobile && !activeRoom) setMobileShowList(true);
   }, [isMobile, activeRoom]);
 
-  useEffect(() => {
-    if (!user?.id || unreadLoadedRef.current) return;
-    unreadLoadedRef.current = true;
+  const loadUnreadCounts = useCallback(async () => {
     try {
-      const saved = sessionStorage.getItem(`studychat_unread_${user.id}`);
-      if (saved) setUnread(JSON.parse(saved));
+      const counts = await fetchUnreadCounts();
+      const activeId = activeRoomIdRef.current;
+      if (activeId) counts[activeId] = 0;
+      setUnread(counts);
     } catch {
       /* ignore */
     }
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
-    if (!unreadStorageKey) return;
-    sessionStorage.setItem(unreadStorageKey, JSON.stringify(unread));
-  }, [unread, unreadStorageKey]);
+    if (!connected) return;
+    if (!hadSocketConnectionRef.current) {
+      hadSocketConnectionRef.current = true;
+      return;
+    }
+    loadUnreadCounts();
+  }, [connected, loadUnreadCounts]);
 
   const totalUnread = Object.values(unread).reduce((sum, n) => sum + n, 0);
 
@@ -266,7 +276,7 @@ export default function ChatPage() {
   }, []);
 
   const markRoomAsRead = useCallback(() => {
-    if (!activeRoom || activeRoom.type === 'public' || messages.length === 0) return;
+    if (!activeRoom || messages.length === 0) return;
     const latest = messages[messages.length - 1];
     if (latest?.id) markRead(activeRoom.id, latest.id);
   }, [activeRoom, messages, markRead]);
@@ -325,10 +335,12 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
+    if (!user?.id) return;
     Promise.all([
       axios.get(`${BACKEND_URL}/api/rooms`),
       fetchChats(),
-    ]).then(([roomsRes, chats]) => {
+      fetchUnreadCounts(),
+    ]).then(([roomsRes, chats, unreadCounts]) => {
       const unique = dedupeRooms(roomsRes.data.map((r) => ({ ...r, type: 'public' })));
       setPublicRooms(unique);
       setDirectChats(chats.direct);
@@ -336,15 +348,21 @@ export default function ChatPage() {
       const allRooms = [...chats.direct, ...chats.groups, ...unique];
       joinRooms(allRooms.map((r) => r.id));
 
+      let selected = null;
       if (chats.direct.length > 0) {
-        setActiveRoom(chats.direct[0]);
+        selected = chats.direct[0];
       } else if (chats.groups.length > 0) {
-        setActiveRoom(chats.groups[0]);
+        selected = chats.groups[0];
       } else if (unique.length > 0) {
-        setActiveRoom(unique[0]);
+        selected = unique[0];
       }
-    });
-  }, [dedupeRooms, joinRooms]);
+      if (selected) {
+        setActiveRoom(selected);
+        unreadCounts[selected.id] = 0;
+      }
+      setUnread(unreadCounts);
+    }).catch(() => {});
+  }, [user?.id, dedupeRooms, joinRooms]);
 
   useEffect(() => {
     activeRoomIdRef.current = activeRoom?.id ?? null;
@@ -359,7 +377,7 @@ export default function ChatPage() {
     setPresenceRoom(activeRoom.id);
     setUnread((prev) => ({ ...prev, [activeRoom.id]: 0 }));
     loadInitialMessages(activeRoom.id);
-    if (activeRoom.type !== 'public') fetchReadState(activeRoom.id);
+    fetchReadState(activeRoom.id);
     setTypingUsers([]);
     setOnlineUsers([]);
     setReplyingTo(null);
@@ -373,10 +391,10 @@ export default function ChatPage() {
   }, [activeRoom, joinRoom, setPresenceRoom, loadInitialMessages, fetchReadState]);
 
   useEffect(() => {
-    if (!connected || !activeRoom || activeRoom.type === 'public' || messages.length === 0) return;
+    if (!connected || !activeRoom || messages.length === 0) return;
     const timer = setTimeout(markRoomAsRead, 400);
     return () => clearTimeout(timer);
-  }, [connected, activeRoom?.id, activeRoom?.type, messages, markRoomAsRead]);
+  }, [connected, activeRoom?.id, messages, markRoomAsRead]);
 
   useEffect(() => {
     const el = messagesAreaRef.current;

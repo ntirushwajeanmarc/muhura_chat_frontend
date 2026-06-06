@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { playCallAlert, stopCallAlert } from '../utils/sounds';
 
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
@@ -20,38 +21,13 @@ export function useCall(socket, currentUser, connected) {
   const remoteAudioRef = useRef(null);
   const activeCallIdRef = useRef(null);
   const pendingIceRef = useRef([]);
-  const ringtoneRef = useRef(null);
-
   const stopRingtone = useCallback(() => {
-    if (ringtoneRef.current) {
-      ringtoneRef.current.pause();
-      ringtoneRef.current = null;
-    }
+    stopCallAlert();
   }, []);
 
-  const playRingtone = useCallback((outgoing = false) => {
-    stopRingtone();
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = outgoing ? 440 : 480;
-      gain.gain.value = 0.08;
-      osc.start();
-      ringtoneRef.current = { pause: () => { osc.stop(); ctx.close(); } };
-      const pulse = setInterval(() => {
-        gain.gain.value = gain.gain.value > 0.05 ? 0.02 : 0.08;
-      }, outgoing ? 1000 : 800);
-      ringtoneRef.current.pause = () => {
-        clearInterval(pulse);
-        try { osc.stop(); ctx.close(); } catch { /* ignore */ }
-      };
-    } catch {
-      /* audio not available */
-    }
-  }, [stopRingtone]);
+  const playRingtone = useCallback(() => {
+    playCallAlert();
+  }, []);
 
   const cleanup = useCallback(() => {
     stopRingtone();
@@ -213,11 +189,13 @@ export function useCall(socket, currentUser, connected) {
         peer: invite.from,
         sdp: invite.sdp,
       });
-      playRingtone(false);
-      if (document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      playRingtone();
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification(`Incoming call from ${invite.from?.username || 'someone'}`, {
           icon: '/logo.png',
           tag: `call-${invite.callId}`,
+          silent: false,
+          requireInteraction: true,
         });
       }
     };

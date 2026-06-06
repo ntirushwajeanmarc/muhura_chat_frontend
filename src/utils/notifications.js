@@ -1,3 +1,5 @@
+import { playMessageAlert } from './sounds';
+
 const PREFS_KEY = 'studychat_notifications';
 
 export function getNotificationPrefs() {
@@ -34,23 +36,7 @@ export function canNotify() {
 }
 
 export function playNotificationSound() {
-  const prefs = getNotificationPrefs();
-  if (!prefs.sound) return;
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.25);
-  } catch {
-    /* ignore */
-  }
+  playMessageAlert();
 }
 
 export function showMessageNotification({ title, body, roomId, onClick }) {
@@ -63,6 +49,7 @@ export function showMessageNotification({ title, body, roomId, onClick }) {
       icon: '/logo.png',
       badge: '/logo.png',
       tag: `room-${roomId}`,
+      silent: false,
     });
     notification.onclick = () => {
       window.focus();
@@ -71,9 +58,7 @@ export function showMessageNotification({ title, body, roomId, onClick }) {
     };
   }
 
-  if (prefs.sound) {
-    playNotificationSound();
-  }
+  playMessageAlert();
 }
 
 export function messagePreview(msg) {

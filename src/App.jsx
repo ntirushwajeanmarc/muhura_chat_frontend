@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthPage from './pages/AuthPage';
 import ChatPage from './pages/ChatPage';
 import InstallPwaPrompt from './components/InstallPwaPrompt';
-import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 import './index.css';
 
 const AppInner = () => {
@@ -23,7 +22,6 @@ export default function App() {
     <AuthProvider>
       <AppInner />
       <InstallPwaPrompt />
-      <PwaUpdatePrompt />
     </AuthProvider>
   );
 }

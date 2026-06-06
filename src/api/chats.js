@@ -6,6 +6,11 @@ export async function fetchChats() {
   return res.data;
 }
 
+export async function fetchUnreadCounts() {
+  const res = await axios.get(`${BACKEND_URL}/api/chats/unread-counts`);
+  return res.data.counts || {};
+}
+
 export async function searchUsers(query) {
   const res = await axios.get(`${BACKEND_URL}/api/users/search`, { params: { q: query } });
   return res.data;

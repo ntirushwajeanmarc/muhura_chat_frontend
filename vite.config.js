@@ -10,7 +10,7 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.js',
       registerType: 'prompt',
-      includeAssets: ['logo.png', 'favicon.png', 'chat_wallpaper.png'],
+      includeAssets: ['logo.png', 'favicon.png', 'chat_wallpaper.png', 'sounds/message.wav', 'sounds/ring.wav'],
       manifest: {
         name: 'EganirA',
         short_name: 'EganirA',
@@ -44,7 +44,7 @@ export default defineConfig({
         ],
       },
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wav}'],
       },
       devOptions: {
         enabled: true,
