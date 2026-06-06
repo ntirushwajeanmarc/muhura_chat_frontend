@@ -5,11 +5,14 @@ export default function PwaUpdatePrompt() {
   const [available, setAvailable] = useState(false);
   const [updating, setUpdating] = useState(false);
 
-  useEffect(() => subscribePwaUpdate(() => setAvailable(true)), []);
+  useEffect(() => subscribePwaUpdate(() => {
+    setAvailable((prev) => (prev ? prev : true));
+  }), []);
 
   if (!available) return null;
 
   const handleUpdate = () => {
+    if (updating) return;
     setUpdating(true);
     applyPwaUpdate();
   };

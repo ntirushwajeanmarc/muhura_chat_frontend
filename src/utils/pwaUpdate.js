@@ -16,8 +16,18 @@ export function subscribePwaUpdate(callback) {
 }
 
 export function applyPwaUpdate() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener(
+      'controllerchange',
+      () => window.location.reload(),
+      { once: true }
+    );
+  }
+
   if (applyUpdateFn) {
     applyUpdateFn(true);
+    // Fallback if the waiting worker never takes control
+    setTimeout(() => window.location.reload(), 2500);
     return true;
   }
   window.location.reload();

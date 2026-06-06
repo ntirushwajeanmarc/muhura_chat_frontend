@@ -5,11 +5,19 @@ import App from './App';
 import {
   setPwaUpdateHandler,
   notifyPwaUpdateAvailable,
-  checkForPwaUpdate,
 } from './utils/pwaUpdate';
 import { setupPushNotifications } from './utils/pushSubscription';
 
 const UPDATE_CHECK_MS = 15 * 60 * 1000;
+const MIN_UPDATE_INTERVAL_MS = 60 * 1000;
+let lastUpdateCheck = 0;
+
+function checkForSwUpdate(registration) {
+  const now = Date.now();
+  if (now - lastUpdateCheck < MIN_UPDATE_INTERVAL_MS) return;
+  lastUpdateCheck = now;
+  registration.update();
+}
 
 const updateSW = registerSW({
   immediate: true,
@@ -21,15 +29,13 @@ const updateSW = registerSW({
 
     setupPushNotifications(registration);
 
-    setInterval(() => registration.update(), UPDATE_CHECK_MS);
+    setInterval(() => checkForSwUpdate(registration), UPDATE_CHECK_MS);
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        registration.update();
+        checkForSwUpdate(registration);
       }
     });
-
-    window.addEventListener('focus', () => registration.update());
   },
   onRegisterError(error) {
     console.error('Service worker registration failed:', error);
@@ -37,8 +43,6 @@ const updateSW = registerSW({
 });
 
 setPwaUpdateHandler(updateSW);
-
-checkForPwaUpdate();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

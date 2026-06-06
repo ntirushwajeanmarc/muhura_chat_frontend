@@ -6,6 +6,17 @@ import { ExpirationPlugin } from 'workbox-expiration';
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
+// Required for vite-plugin-pwa "Update now" — without this the prompt loops forever
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 const denylist = [/^\/api/, /^\/socket\.io/, /^\/uploads/];
 const handler = createHandlerBoundToURL('/index.html');
 registerRoute(new NavigationRoute(handler, { denylist }));
