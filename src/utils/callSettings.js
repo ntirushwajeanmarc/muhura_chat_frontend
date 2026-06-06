@@ -3,7 +3,7 @@ const KEY = 'eganira_call_settings';
 const DEFAULTS = {
   speakerOn: true,
   defaultSpeaker: true,
-  ringVolume: 0.4,
+  ringVolume: 0.55,
 };
 
 export function getCallSettings() {

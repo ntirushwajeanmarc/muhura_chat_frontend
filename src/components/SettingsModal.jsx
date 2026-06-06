@@ -341,7 +341,7 @@ export default function SettingsModal({ onClose }) {
                         setCallPrefs(next);
                       }}
                     />
-                    <p className="text-xs text-wa-muted mt-1.5">Soft chime — lower is gentler</p>
+                    <p className="text-xs text-wa-muted mt-1.5">Gentle marimba ring — lower is softer</p>
                   </div>
                 </div>
               </div>
