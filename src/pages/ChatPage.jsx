@@ -51,13 +51,33 @@ function roomLabel(room) {
   if (!room) return '';
   if (room.type === 'direct') return room.display_name || room.peer?.username || 'Chat';
   if (room.type === 'group') return room.display_name || room.name;
-  return room.name;
+  return room.name ? `#${room.name}` : 'Channel';
 }
 
 function roomPrefix(room) {
   if (room?.type === 'public') return '#';
   if (room?.type === 'group') return '👥';
   return null;
+}
+
+function unreadMapFromRooms(...roomLists) {
+  const counts = {};
+  roomLists.flat().forEach((room) => {
+    const n = room?.unread_count || 0;
+    if (n > 0) counts[room.id] = n;
+  });
+  return counts;
+}
+
+function mergeUnreadMaps(...maps) {
+  const merged = {};
+  maps.forEach((map) => {
+    Object.entries(map || {}).forEach(([id, count]) => {
+      const n = parseInt(count, 10) || 0;
+      if (n > 0) merged[id] = Math.max(merged[id] || 0, n);
+    });
+  });
+  return merged;
 }
 
 export default function ChatPage() {
@@ -183,18 +203,6 @@ export default function ChatPage() {
     });
   }, [unread]);
 
-  const sortedDirectChats = useMemo(
-    () => sortByUnreadThenRecent(directChats),
-    [directChats, sortByUnreadThenRecent]
-  );
-  const sortedGroupChats = useMemo(
-    () => sortByUnreadThenRecent(groupChats),
-    [groupChats, sortByUnreadThenRecent]
-  );
-  const sortedPublicRooms = useMemo(
-    () => sortByUnreadThenRecent(publicRooms),
-    [publicRooms, sortByUnreadThenRecent]
-  );
   const sidebarRooms = useMemo(
     () => sortByUnreadThenRecent([...directChats, ...groupChats, ...publicRooms]),
     [directChats, groupChats, publicRooms, sortByUnreadThenRecent]
@@ -318,6 +326,14 @@ export default function ChatPage() {
     setDirectChats(direct);
     setGroupChats(groups);
     joinRooms([...direct, ...groups].map((r) => r.id));
+    const fromRooms = unreadMapFromRooms(direct, groups);
+    const activeId = activeRoomIdRef.current;
+    if (activeId) fromRooms[activeId] = 0;
+    setUnread((prev) => {
+      const merged = mergeUnreadMaps(prev, fromRooms);
+      if (activeId) merged[activeId] = 0;
+      return merged;
+    });
     return { direct, groups };
   }, [joinRooms]);
 
@@ -339,28 +355,35 @@ export default function ChatPage() {
     Promise.all([
       axios.get(`${BACKEND_URL}/api/rooms`),
       fetchChats(),
-      fetchUnreadCounts(),
-    ]).then(([roomsRes, chats, unreadCounts]) => {
-      const unique = dedupeRooms(roomsRes.data.map((r) => ({ ...r, type: 'public' })));
+      fetchUnreadCounts().catch(() => ({})),
+    ]).then(([roomsRes, chats, unreadCountsApi]) => {
+      const unique = dedupeRooms(roomsRes.data.map((r) => ({ ...r, type: r.type || 'public' })));
       setPublicRooms(unique);
       setDirectChats(chats.direct);
       setGroupChats(chats.groups);
       const allRooms = [...chats.direct, ...chats.groups, ...unique];
       joinRooms(allRooms.map((r) => r.id));
 
-      let selected = null;
-      if (chats.direct.length > 0) {
-        selected = chats.direct[0];
-      } else if (chats.groups.length > 0) {
-        selected = chats.groups[0];
-      } else if (unique.length > 0) {
-        selected = unique[0];
+      const counts = mergeUnreadMaps(
+        unreadMapFromRooms(chats.direct, chats.groups, unique),
+        unreadCountsApi
+      );
+      setUnread(counts);
+
+      const onMobile = window.matchMedia('(max-width: 767px)').matches;
+      if (onMobile) {
+        setMobileShowList(true);
+        return;
       }
-      if (selected) {
-        setActiveRoom(selected);
-        unreadCounts[selected.id] = 0;
+
+      const pickUnread = allRooms
+        .filter((r) => counts[r.id] > 0)
+        .sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0))[0];
+      const pick = pickUnread || allRooms[0];
+      if (pick) {
+        setActiveRoom(pick);
+        setUnread((prev) => ({ ...prev, [pick.id]: 0 }));
       }
-      setUnread(unreadCounts);
     }).catch(() => {});
   }, [user?.id, dedupeRooms, joinRooms]);
 
@@ -1008,7 +1031,8 @@ export default function ChatPage() {
           {sidebarOpen || isMobile ? (
             <>
               <img src="/logo.png" alt="" className="w-7 h-7 rounded-md shrink-0 object-contain" />
-              <span className="font-bold text-sm truncate flex-1">EganirA</span>
+              <span className="font-bold text-sm truncate flex-1">Chats</span>
+              {totalUnread > 0 && <UnreadBadge count={totalUnread} />}
               {!isMobile && (
                 <button
                   type="button"
@@ -1083,69 +1107,32 @@ export default function ChatPage() {
 
         {sidebarOpen && (
           <div className="flex-1 overflow-y-auto min-h-0 px-2 py-1 sidebar-scroll">
-            <div className="mb-4">
-              <p className="section-label">Direct chats</p>
-              {directChats.length === 0 ? (
-                <p className="text-xs text-wa-muted px-2 py-1">No chats yet</p>
-              ) : (
-                sortedDirectChats.map((room) => renderChatItem(room))
-              )}
-            </div>
-            <div className="mb-4">
-              <p className="section-label">Groups</p>
-              {groupChats.length === 0 ? (
-                <p className="text-xs text-wa-muted px-2 py-1">No groups yet</p>
-              ) : (
-                sortedGroupChats.map((room) => renderChatItem(room))
-              )}
-            </div>
-            <div className="mb-2">
-              <div className="flex items-center justify-between px-2 mb-1">
-                <p className="section-label mb-0">Channels</p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
-                    onClick={() => {
-                      setCreateChannelName('');
-                      setShowCreateChannel(true);
-                    }}
-                  >
-                    Create
-                  </button>
-                  <button
-                    type="button"
-                    className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
-                    onClick={() => setShowChannelSearch(true)}
-                  >
-                    Find
-                  </button>
-                </div>
+            {sidebarRooms.length === 0 ? (
+              <p className="text-xs text-wa-muted px-2 py-4 text-center">No chats yet — start a conversation</p>
+            ) : (
+              sidebarRooms.map((room) => renderChatItem(room))
+            )}
+            <div className="flex items-center justify-between px-2 pt-3 pb-1 mt-2 border-t border-wa-border/60">
+              <p className="section-label mb-0">Channels</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
+                  onClick={() => {
+                    setCreateChannelName('');
+                    setShowCreateChannel(true);
+                  }}
+                >
+                  Create
+                </button>
+                <button
+                  type="button"
+                  className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
+                  onClick={() => setShowChannelSearch(true)}
+                >
+                  Find
+                </button>
               </div>
-              {sortedPublicRooms.length === 0 ? (
-                <p className="text-xs text-wa-muted px-2 py-1">Create or find channels to join</p>
-              ) : (
-                sortedPublicRooms.map((room) => {
-                  const unreadCount = unread[room.id] || 0;
-                  const hasUnread = unreadCount > 0;
-                  return (
-                    <button
-                      key={room.id}
-                      type="button"
-                      className={`flex items-center gap-3 w-full p-2.5 rounded-xl text-left transition-colors ${
-                        activeRoom?.id === room.id ? 'bg-wa-accent/15' : 'hover:bg-wa-surface/70'
-                      }`}
-                      onClick={() => selectRoom(room)}
-                    >
-                      <span className="w-11 h-11 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
-                      <span className={`text-sm truncate flex-1 ${hasUnread ? 'font-bold text-slate-50' : 'font-medium text-slate-100'}`}>
-                        {room.name}
-                      </span>
-                      <UnreadBadge count={unreadCount} />
-                    </button>
-                  );
-                })
-              )}
             </div>
           </div>
         )}
