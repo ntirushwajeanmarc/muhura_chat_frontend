@@ -14,7 +14,7 @@ export default defineConfig({
       manifest: {
         name: 'EganirA',
         short_name: 'EganirA',
-        description: 'Connect with your classmates on EganirA',
+        description: 'Connect with your friends',
         theme_color: '#075e54',
         background_color: '#0b141a',
         display: 'standalone',

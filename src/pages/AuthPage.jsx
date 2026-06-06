@@ -34,7 +34,7 @@ export default function AuthPage() {
         <div className="text-center mb-7">
           <img src="/logo.png" alt="" className="w-16 h-16 rounded-2xl mx-auto mb-3 object-contain" />
           <h1 className="text-2xl font-bold text-slate-100">EganirA</h1>
-          <p className="text-wa-muted text-sm mt-1">Connect with your classmates</p>
+          <p className="text-wa-muted text-sm mt-1">Connect with your friends</p>
         </div>
 
         <div className="flex bg-wa-surface rounded-lg p-1 mb-6">
