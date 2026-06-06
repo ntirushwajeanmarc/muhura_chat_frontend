@@ -1,8 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { playCallAlert, stopCallAlert } from '../utils/sounds';
 import { getCallSettings, setCallSettings } from '../utils/callSettings';
-
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+import { ICE_SERVERS } from '../utils/iceServers';
 
 function createCallId() {
   return `call-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -11,7 +10,18 @@ function createCallId() {
 function normalizeSdp(sdp) {
   if (!sdp) return null;
   if (typeof sdp === 'string') return { type: 'offer', sdp };
-  return { type: sdp.type, sdp: sdp.sdp };
+  if (sdp.type && sdp.sdp) return { type: sdp.type, sdp: sdp.sdp };
+  return null;
+}
+
+function toIceCandidateInit(candidate) {
+  if (!candidate || typeof candidate !== 'object') return null;
+  if (!candidate.candidate) return null;
+  return {
+    candidate: candidate.candidate,
+    sdpMid: candidate.sdpMid ?? null,
+    sdpMLineIndex: candidate.sdpMLineIndex ?? null,
+  };
 }
 
 export function useCall(socket, currentUser, connected) {
@@ -22,6 +32,7 @@ export function useCall(socket, currentUser, connected) {
   const [speakerOn, setSpeakerOn] = useState(() => getCallSettings().defaultSpeaker);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const localVideoRef = useRef(null);
@@ -78,6 +89,18 @@ export function useCall(socket, currentUser, connected) {
     el.srcObject = stream || null;
   }, []);
 
+  const attachRemoteStream = useCallback((stream) => {
+    if (!stream) return;
+    remoteStreamRef.current = stream;
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = stream;
+      applySpeakerOutput(speakerOn);
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = stream;
+    }
+  }, [applySpeakerOutput, speakerOn]);
+
   const setMicMuted = useCallback((muted) => {
     setIsMuted(muted);
     localStreamRef.current?.getAudioTracks().forEach((track) => {
@@ -114,6 +137,7 @@ export function useCall(socket, currentUser, connected) {
     if (pcRef.current) {
       pcRef.current.ontrack = null;
       pcRef.current.onicecandidate = null;
+      pcRef.current.oniceconnectionstatechange = null;
       pcRef.current.close();
       pcRef.current = null;
     }
@@ -121,6 +145,7 @@ export function useCall(socket, currentUser, connected) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
+    remoteStreamRef.current = null;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
@@ -164,18 +189,26 @@ export function useCall(socket, currentUser, connected) {
       }
     };
     pc.ontrack = (event) => {
-      const remoteStream = event.streams[0];
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
-        applySpeakerOutput(speakerOn);
+      let streamOut = remoteStreamRef.current;
+      if (event.streams?.[0]) {
+        streamOut = event.streams[0];
+      } else if (event.track) {
+        if (!streamOut) streamOut = new MediaStream();
+        if (!streamOut.getTracks().some((t) => t.id === event.track.id)) {
+          streamOut.addTrack(event.track);
+        }
       }
-      if (isVideo && remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
+      if (streamOut) attachRemoteStream(streamOut);
+    };
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState;
+      if (state === 'failed' || state === 'disconnected') {
+        setCallError('Connection lost — check network and try again');
       }
     };
     pcRef.current = pc;
     return pc;
-  }, [socket, applySpeakerOutput, speakerOn]);
+  }, [socket, attachRemoteStream]);
 
   const startCall = useCallback(async (peerUser, callType = 'audio') => {
     if (!socket?.connected || !connected) {
@@ -195,10 +228,7 @@ export function useCall(socket, currentUser, connected) {
       const callId = createCallId();
       activeCallIdRef.current = callId;
       const pc = createPeer(callId, peerUser.id, stream, isVideo);
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: isVideo,
-      });
+      const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('call_invite', {
         toUserId: peerUser.id,
@@ -242,10 +272,7 @@ export function useCall(socket, currentUser, connected) {
       const remoteSdp = normalizeSdp(invite.sdp);
       await pc.setRemoteDescription(remoteSdp);
       await flushPendingIce();
-      const answer = await pc.createAnswer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: isVideo,
-      });
+      const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('call_answer', {
         toUserId: invite.from.id,
@@ -259,13 +286,15 @@ export function useCall(socket, currentUser, connected) {
         peer: invite.from,
         localStream: stream,
       });
+      bindStreamToVideo(localVideoRef.current, stream);
+      if (remoteStreamRef.current) attachRemoteStream(remoteStreamRef.current);
     } catch (err) {
       socket.emit('call_reject', { toUserId: invite.from.id, callId: invite.callId });
       cleanup();
       setCallError('Could not answer call');
       throw err;
     }
-  }, [socket, getMedia, createPeer, cleanup, stopRingtone, flushPendingIce, refreshOutputDevices, bindStreamToVideo]);
+  }, [socket, getMedia, createPeer, cleanup, stopRingtone, flushPendingIce, refreshOutputDevices, bindStreamToVideo, attachRemoteStream]);
 
   const rejectCall = useCallback((invite) => {
     if (!socket || !invite) return;
@@ -294,6 +323,12 @@ export function useCall(socket, currentUser, connected) {
       bindStreamToVideo(localVideoRef.current, callState.localStream);
     }
   }, [callState?.localStream, callState?.status, bindStreamToVideo]);
+
+  useEffect(() => {
+    if (callState?.status === 'active' && remoteStreamRef.current) {
+      attachRemoteStream(remoteStreamRef.current);
+    }
+  }, [callState?.status, callState?.callType, attachRemoteStream]);
 
   useEffect(() => {
     if (!socket) return undefined;
@@ -336,20 +371,28 @@ export function useCall(socket, currentUser, connected) {
     const onAnswer = async ({ callId, sdp }) => {
       if (activeCallIdRef.current !== callId || !pcRef.current) return;
       stopRingtone();
-      const remoteSdp = normalizeSdp(sdp);
-      await pcRef.current.setRemoteDescription(remoteSdp);
-      await flushPendingIce();
-      setCallState((prev) => (prev ? { ...prev, status: 'active' } : prev));
+      try {
+        const remoteSdp = normalizeSdp(sdp);
+        await pcRef.current.setRemoteDescription(remoteSdp);
+        await flushPendingIce();
+        setCallState((prev) => (prev ? { ...prev, status: 'active' } : prev));
+        if (remoteStreamRef.current) attachRemoteStream(remoteStreamRef.current);
+      } catch {
+        setCallError('Could not connect call');
+        cleanup();
+      }
     };
 
     const onIce = async ({ callId, candidate }) => {
-      if (activeCallIdRef.current !== callId || !candidate) return;
+      if (activeCallIdRef.current !== callId) return;
+      const iceInit = toIceCandidateInit(candidate);
+      if (!iceInit) return;
       if (!pcRef.current?.remoteDescription) {
-        pendingIceRef.current.push(candidate);
+        pendingIceRef.current.push(iceInit);
         return;
       }
       try {
-        await pcRef.current.addIceCandidate(candidate);
+        await pcRef.current.addIceCandidate(iceInit);
       } catch {
         /* ignore */
       }
@@ -383,7 +426,7 @@ export function useCall(socket, currentUser, connected) {
       socket.off('call_reject', onReject);
       socket.off('call_end', onEnd);
     };
-  }, [socket, cleanup, playRingtone, stopRingtone, flushPendingIce]);
+  }, [socket, cleanup, playRingtone, stopRingtone, flushPendingIce, attachRemoteStream]);
 
   useEffect(() => () => cleanup(), [cleanup]);
 

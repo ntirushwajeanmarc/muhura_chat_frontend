@@ -93,13 +93,13 @@ export default function CallModal({
               />
             </div>
           )}
-          {isActive && (
+          {(isActive || isOutgoing) && (
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
-              className={`absolute top-4 right-4 w-28 h-40 sm:w-32 sm:h-44 rounded-xl object-cover border-2 border-white/20 shadow-xl bg-black ${
+              className={`absolute top-4 right-4 w-28 h-40 sm:w-32 sm:h-44 rounded-xl object-cover border-2 border-white/20 shadow-xl bg-black z-10 ${
                 isCameraOff ? 'opacity-0 pointer-events-none' : ''
               }`}
             />

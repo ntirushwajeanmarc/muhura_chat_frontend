@@ -128,6 +128,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [onlineUserIds, setOnlineUserIds] = useState(() => new Set());
   const [typingUsers, setTypingUsers] = useState([]);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -566,6 +567,18 @@ export default function ChatPage() {
       if (roomId !== activeRoomIdRef.current) return;
       setOnlineUsers(users || []);
     });
+    const offPresenceSnapshot = on('presence_snapshot', ({ onlineUserIds: ids }) => {
+      setOnlineUserIds(new Set(ids || []));
+    });
+    const offUserPresence = on('user_presence', ({ userId, online }) => {
+      if (!userId) return;
+      setOnlineUserIds((prev) => {
+        const next = new Set(prev);
+        if (online) next.add(userId);
+        else next.delete(userId);
+        return next;
+      });
+    });
     const offTyping = on('user_typing', ({ username, isTyping, roomId }) => {
       if (roomId !== activeRoomIdRef.current) return;
       if (username === userRef.current?.username) return;
@@ -613,6 +626,8 @@ export default function ChatPage() {
       offMsg?.();
       offRoom?.();
       offOnline?.();
+      offPresenceSnapshot?.();
+      offUserPresence?.();
       offTyping?.();
       offEdited?.();
       offLike?.();
@@ -933,12 +948,28 @@ export default function ChatPage() {
     );
   };
 
+  const isUserOnline = (userId) => Boolean(userId && onlineUserIds.has(userId));
+
+  const avatarWithPresence = (username, color, avatarUrl, size, userId) => (
+    <div className="relative shrink-0">
+      <Avatar username={username} color={color} avatarUrl={avatarUrl} size={size} />
+      {isUserOnline(userId) && (
+        <span
+          className="absolute bottom-0 right-0 block w-3 h-3 rounded-full bg-emerald-400 border-2 border-wa-dark"
+          title="Online"
+          aria-hidden
+        />
+      )}
+    </div>
+  );
+
   const renderChatItem = (room, compact = false) => {
     const label = roomLabel(room);
     const prefix = roomPrefix(room);
     const avatarColor = room.type === 'direct' ? room.peer?.avatar_color : null;
     const avatarUrl = room.type === 'direct' ? room.peer?.avatar_url : null;
     const avatarName = room.type === 'direct' ? room.peer?.username : label;
+    const peerId = room.type === 'direct' ? room.peer?.id : null;
     const unreadCount = unread[room.id] || 0;
     const hasUnread = unreadCount > 0;
 
@@ -954,7 +985,7 @@ export default function ChatPage() {
           title={hasUnread ? `${label} (${unreadCount} unread)` : label}
         >
           {room.type === 'direct' ? (
-            <Avatar username={avatarName} color={avatarColor} avatarUrl={avatarUrl} size={36} />
+            avatarWithPresence(avatarName, avatarColor, avatarUrl, 36, peerId)
           ) : (
             <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center text-base">
               {prefix || '💬'}
@@ -980,7 +1011,7 @@ export default function ChatPage() {
         onClick={() => selectRoom(room)}
       >
         {room.type === 'direct' ? (
-          <Avatar username={avatarName} color={avatarColor} avatarUrl={avatarUrl} size={40} />
+          avatarWithPresence(avatarName, avatarColor, avatarUrl, 40, peerId)
         ) : (
           <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">
             {prefix || '💬'}
@@ -1001,8 +1032,18 @@ export default function ChatPage() {
     );
   };
 
+  const peerIsOnline = activeRoom?.type === 'direct' && activeRoom.peer?.id
+    ? isUserOnline(activeRoom.peer.id)
+    : false;
+
   const headerAvatar = activeRoom?.type === 'direct' && activeRoom.peer
-    ? <Avatar username={activeRoom.peer.username} color={activeRoom.peer.avatar_color} avatarUrl={activeRoom.peer.avatar_url} size={36} />
+    ? avatarWithPresence(
+        activeRoom.peer.username,
+        activeRoom.peer.avatar_color,
+        activeRoom.peer.avatar_url,
+        36,
+        activeRoom.peer.id,
+      )
     : null;
 
   const placeholder = activeRoom?.type === 'direct'
@@ -1489,7 +1530,13 @@ export default function ChatPage() {
                 </p>
                 <p className="text-[11px] text-wa-muted truncate">
                   {activeRoom.type === 'group' && `${activeRoom.member_count || '?'} members · tap for info`}
-                  {activeRoom.type === 'direct' && 'Tap for profile'}
+                  {activeRoom.type === 'direct' && (
+                    typingUsers.length > 0
+                      ? `${typingUsers.join(', ')} typing…`
+                      : peerIsOnline
+                        ? 'Online'
+                        : 'Offline'
+                  )}
                   {activeRoom.type === 'public' && (
                     `${activeRoom.description || 'Channel'}${onlineUsers.length > 0 ? ` · ${onlineUsers.length} online` : ''}`
                   )}
