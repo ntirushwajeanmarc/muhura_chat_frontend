@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { BACKEND_URL } from '../config';
-import { fetchRoomMessages } from '../api/messages';
+import { fetchRoomMessages, fetchMessageContext } from '../api/messages';
 import {
   fetchChats,
   fetchUnreadCounts,
@@ -11,6 +11,9 @@ import {
   createGroupChat,
   addGroupMembers,
   fetchGroupMembers,
+  discoverChannels,
+  searchChannels,
+  joinChannel,
 } from '../api/chats';
 import { uploadFile } from '../api/attachments';
 import MessageContent from '../components/MessageContent';
@@ -40,7 +43,8 @@ import ChannelSearchModal from '../components/ChannelSearchModal';
 import CreateChannelModal from '../components/CreateChannelModal';
 import WallpaperPicker from '../components/WallpaperPicker';
 import CallModal from '../components/CallModal';
-import { wallpaperClass } from '../utils/wallpapers';
+import ChatWallpaper from '../components/ChatWallpaper';
+import ChatMessageSearch from '../components/ChatMessageSearch';
 import { fetchStarsFeed, deleteStar } from '../api/social';
 import StarsBar from '../components/StarsBar';
 import CreateStarModal from '../components/CreateStarModal';
@@ -80,6 +84,22 @@ function mergeUnreadMaps(...maps) {
   return merged;
 }
 
+function filterRooms(rooms, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return rooms;
+  return rooms.filter((room) => {
+    const label = roomLabel(room).toLowerCase();
+    const last = (room.last_message || '').toLowerCase();
+    const peer = (room.peer?.username || '').toLowerCase();
+    const desc = (room.description || '').toLowerCase();
+    return label.includes(q) || last.includes(q) || peer.includes(q) || desc.includes(q);
+  });
+}
+
+function sumUnread(rooms, unread) {
+  return rooms.reduce((sum, room) => sum + (unread[room.id] || 0), 0);
+}
+
 export default function ChatPage() {
   const { user, token, logout, updateSession } = useAuth();
   const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, markRead, on, connected, socket } = useSocket(token);
@@ -92,9 +112,13 @@ export default function ChatPage() {
     acceptCall,
     rejectCall,
     endCall,
+    isCameraOff,
     toggleMute,
+    toggleCamera,
     toggleSpeaker,
     remoteAudioRef,
+    remoteVideoRef,
+    localVideoRef,
     clearCallError,
   } = useCall(socket, user, connected);
   const [publicRooms, setPublicRooms] = useState([]);
@@ -124,6 +148,13 @@ export default function ChatPage() {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [createChannelName, setCreateChannelName] = useState('');
   const [showWallpaper, setShowWallpaper] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState('chats');
+  const [listSearchQuery, setListSearchQuery] = useState('');
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [highlightMessageId, setHighlightMessageId] = useState(null);
+  const [discoverList, setDiscoverList] = useState([]);
+  const [channelSearchResults, setChannelSearchResults] = useState([]);
+  const [joiningChannelId, setJoiningChannelId] = useState(null);
   const [groupMemberIds, setGroupMemberIds] = useState([]);
   const [profileUserId, setProfileUserId] = useState(null);
   const [starsFeed, setStarsFeed] = useState([]);
@@ -171,6 +202,36 @@ export default function ChatPage() {
   }, [loadStarsFeed]);
 
   useEffect(() => {
+    if (sidebarTab !== 'channels') return;
+    discoverChannels()
+      .then(setDiscoverList)
+      .catch(() => setDiscoverList([]));
+  }, [sidebarTab]);
+
+  useEffect(() => {
+    if (sidebarTab !== 'channels') {
+      setChannelSearchResults([]);
+      return undefined;
+    }
+    const q = listSearchQuery.trim();
+    if (q.length < 1) {
+      setChannelSearchResults([]);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      searchChannels(q)
+        .then(setChannelSearchResults)
+        .catch(() => setChannelSearchResults([]));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [sidebarTab, listSearchQuery]);
+
+  useEffect(() => {
+    setShowMessageSearch(false);
+    setHighlightMessageId(null);
+  }, [activeRoom?.id]);
+
+  useEffect(() => {
     if (isMobile) setSidebarOpen(true);
     if (isMobile && !activeRoom) setMobileShowList(true);
   }, [isMobile, activeRoom]);
@@ -207,10 +268,30 @@ export default function ChatPage() {
     });
   }, [unread]);
 
-  const sidebarRooms = useMemo(
-    () => sortByUnreadThenRecent([...directChats, ...groupChats, ...publicRooms]),
-    [directChats, groupChats, publicRooms, sortByUnreadThenRecent]
+  const chatRooms = useMemo(
+    () => sortByUnreadThenRecent([...directChats, ...groupChats]),
+    [directChats, groupChats, sortByUnreadThenRecent]
   );
+
+  const channelRooms = useMemo(
+    () => sortByUnreadThenRecent([...publicRooms]),
+    [publicRooms, sortByUnreadThenRecent]
+  );
+
+  const filteredChatRooms = useMemo(
+    () => filterRooms(chatRooms, listSearchQuery),
+    [chatRooms, listSearchQuery]
+  );
+
+  const filteredChannelRooms = useMemo(
+    () => filterRooms(channelRooms, listSearchQuery),
+    [channelRooms, listSearchQuery]
+  );
+
+  const chatsUnread = useMemo(() => sumUnread(chatRooms, unread), [chatRooms, unread]);
+  const channelsUnread = useMemo(() => sumUnread(channelRooms, unread), [channelRooms, unread]);
+
+  const sidebarRooms = sidebarTab === 'channels' ? channelRooms : chatRooms;
 
   useEffect(() => {
     document.title = totalUnread > 0 ? `(${totalUnread}) EganirA` : 'EganirA';
@@ -680,6 +761,8 @@ export default function ChatPage() {
   };
 
   const selectRoom = (room) => {
+    if (room?.type === 'public') setSidebarTab('channels');
+    else setSidebarTab('chats');
     setActiveRoom(room);
     setUnread((prev) => ({ ...prev, [room.id]: 0 }));
     if (isMobile) setMobileShowList(false);
@@ -750,20 +833,56 @@ export default function ChatPage() {
     }
   };
 
-  const handleStartCall = async () => {
+  const handleStartCall = async (callType = 'audio') => {
     if (!activeRoom?.peer) return;
     if (!connected) {
       clearCallError();
       return;
     }
     try {
-      await startCall(activeRoom.peer, 'audio');
+      await startCall(activeRoom.peer, callType);
     } catch {
       /* error shown in CallModal */
     }
   };
 
-  const chatWallpaper = wallpaperClass(user?.chat_wallpaper || 'default');
+  const handleJumpToMessage = async (messageId) => {
+    if (!activeRoom?.id) return;
+    setShowMessageSearch(false);
+    setHighlightMessageId(messageId);
+    const exists = messages.some((m) => m.id === messageId);
+    if (!exists) {
+      try {
+        const data = await fetchMessageContext(activeRoom.id, messageId);
+        setMessages(data.messages || []);
+        setHasMoreOlder(true);
+      } catch {
+        return;
+      }
+    }
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`msg-${messageId}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    setTimeout(() => setHighlightMessageId(null), 2500);
+  };
+
+  const handleQuickJoinChannel = async (channel) => {
+    if (channel.joined) {
+      const room = publicRooms.find((r) => r.id === channel.id) || { ...channel, type: 'public' };
+      selectRoom(room);
+      return;
+    }
+    setJoiningChannelId(channel.id);
+    try {
+      const room = await joinChannel(channel.id);
+      handleChannelJoin(room);
+    } catch {
+      /* ignore */
+    } finally {
+      setJoiningChannelId(null);
+    }
+  };
 
   const handleStarPosted = (star) => {
     setStarsFeed((prev) => {
@@ -921,11 +1040,11 @@ export default function ChatPage() {
           userId={profileUserId}
           onClose={() => setProfileUserId(null)}
           onEditProfile={() => setShowSettings(true)}
-          onCall={profileUserId !== user?.id ? async (profile) => {
+          onCall={profileUserId !== user?.id ? async (profile, callType = 'audio') => {
             try {
-              await startCall(profile, 'audio');
+              await startCall(profile, callType);
             } catch {
-              /* mic denied */
+              /* permission denied */
             }
           } : undefined}
         />
@@ -999,8 +1118,12 @@ export default function ChatPage() {
         isMuted={isMuted}
         speakerOn={speakerOn}
         onToggleMute={toggleMute}
+        onToggleCamera={toggleCamera}
         onToggleSpeaker={toggleSpeaker}
+        isCameraOff={isCameraOff}
         onDismissError={clearCallError}
+        remoteVideoRef={remoteVideoRef}
+        localVideoRef={localVideoRef}
         onAccept={() => {
           if (callState?.status === 'incoming') {
             acceptCall({
@@ -1039,7 +1162,7 @@ export default function ChatPage() {
           {sidebarOpen || isMobile ? (
             <>
               <img src="/logo.png" alt="" className="w-7 h-7 rounded-md shrink-0 object-contain" />
-              <span className="font-bold text-sm truncate flex-1">Chats</span>
+              <span className="font-bold text-sm truncate flex-1">EganirA</span>
               {totalUnread > 0 && <UnreadBadge count={totalUnread} />}
               {!isMobile && (
                 <button
@@ -1075,30 +1198,93 @@ export default function ChatPage() {
           />
         )}
 
-        <div className={`shrink-0 border-b border-wa-border ${sidebarOpen || isMobile ? 'px-3 py-2.5' : 'p-1.5'}`}>
-          {sidebarOpen || isMobile ? (
-            <div className="flex gap-2">
+        {(sidebarOpen || isMobile) && (
+          <div className="shrink-0 px-3 pt-2 pb-1 border-b border-wa-border/60">
+            <div className="flex rounded-xl bg-wa-surface/80 p-1 gap-1">
               <button
                 type="button"
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
-                onClick={() => setShowNewChat(true)}
+                onClick={() => setSidebarTab('chats')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  sidebarTab === 'chats' ? 'bg-wa-accent text-white shadow-sm' : 'text-wa-muted hover:text-slate-200'
+                }`}
               >
-                <span>💬</span>
-                <span>New chat</span>
+                <span>Chats</span>
+                {chatsUnread > 0 && <UnreadBadge count={chatsUnread} className="min-w-[18px] h-[18px] text-[10px]" />}
               </button>
               <button
                 type="button"
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
-                onClick={() => setShowNewGroup(true)}
+                onClick={() => setSidebarTab('channels')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  sidebarTab === 'channels' ? 'bg-wa-accent text-white shadow-sm' : 'text-wa-muted hover:text-slate-200'
+                }`}
               >
-                <span>👥</span>
-                <span>Group</span>
+                <span>Channels</span>
+                {channelsUnread > 0 && <UnreadBadge count={channelsUnread} className="min-w-[18px] h-[18px] text-[10px]" />}
               </button>
             </div>
+          </div>
+        )}
+
+        {(sidebarOpen || isMobile) && (
+          <div className="shrink-0 px-3 py-2 border-b border-wa-border/60">
+            <input
+              type="search"
+              value={listSearchQuery}
+              onChange={(e) => setListSearchQuery(e.target.value)}
+              placeholder={sidebarTab === 'channels' ? 'Search channels…' : 'Search conversations…'}
+              className="w-full px-3 py-2 bg-wa-surface border border-wa-border rounded-lg text-sm outline-none focus:border-wa-accent"
+            />
+          </div>
+        )}
+
+        <div className={`shrink-0 border-b border-wa-border ${sidebarOpen || isMobile ? 'px-3 py-2.5' : 'p-1.5'}`}>
+          {sidebarOpen || isMobile ? (
+            sidebarTab === 'chats' ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
+                  onClick={() => setShowNewChat(true)}
+                >
+                  <span>💬</span>
+                  <span>New chat</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
+                  onClick={() => setShowNewGroup(true)}
+                >
+                  <span>👥</span>
+                  <span>Group</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-accent hover:bg-wa-accent-hover text-sm font-medium text-white transition-colors"
+                  onClick={() => {
+                    setCreateChannelName('');
+                    setShowCreateChannel(true);
+                  }}
+                >
+                  <span>#</span>
+                  <span>Create channel</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
+                  onClick={() => setShowChannelSearch(true)}
+                >
+                  <span>🔍</span>
+                  <span>Browse</span>
+                </button>
+              </div>
+            )
           ) : (
             <div className="flex flex-col gap-1.5">
-              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border text-lg" onClick={() => setShowNewChat(true)} title="New chat">💬</button>
-              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border text-lg" onClick={() => setShowNewGroup(true)} title="New group">👥</button>
+              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border text-lg" onClick={() => { setSidebarTab('chats'); setShowNewChat(true); }} title="New chat">💬</button>
+              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border text-lg" onClick={() => { setSidebarTab('channels'); setShowCreateChannel(true); }} title="Create channel">#</button>
             </div>
           )}
         </div>
@@ -1106,7 +1292,7 @@ export default function ChatPage() {
         {!sidebarOpen && (
           <div className="flex-1 overflow-y-auto py-2 flex flex-col gap-2 min-h-0 px-1">
             {sidebarRooms.length === 0 ? (
-              <p className="text-[10px] text-wa-muted text-center px-1">No chats yet</p>
+              <p className="text-[10px] text-wa-muted text-center px-1">No {sidebarTab}</p>
             ) : (
               sidebarRooms.map((room) => renderChatItem(room, true))
             )}
@@ -1115,33 +1301,89 @@ export default function ChatPage() {
 
         {sidebarOpen && (
           <div className="flex-1 overflow-y-auto min-h-0 px-2 py-1 sidebar-scroll">
-            {sidebarRooms.length === 0 ? (
-              <p className="text-xs text-wa-muted px-2 py-4 text-center">No chats yet — start a conversation</p>
-            ) : (
-              sidebarRooms.map((room) => renderChatItem(room))
+            {sidebarTab === 'chats' && (
+              <>
+                {filteredChatRooms.length === 0 ? (
+                  <p className="text-xs text-wa-muted px-2 py-4 text-center">
+                    {listSearchQuery.trim() ? 'No conversations match your search' : 'No chats yet — start a conversation'}
+                  </p>
+                ) : (
+                  filteredChatRooms.map((room) => renderChatItem(room))
+                )}
+              </>
             )}
-            <div className="flex items-center justify-between px-2 pt-3 pb-1 mt-2 border-t border-wa-border/60">
-              <p className="section-label mb-0">Channels</p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
-                  onClick={() => {
-                    setCreateChannelName('');
-                    setShowCreateChannel(true);
-                  }}
-                >
-                  Create
-                </button>
-                <button
-                  type="button"
-                  className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
-                  onClick={() => setShowChannelSearch(true)}
-                >
-                  Find
-                </button>
-              </div>
-            </div>
+
+            {sidebarTab === 'channels' && (
+              <>
+                {!listSearchQuery.trim() && (
+                  <div className="px-1 py-2 mb-1">
+                    <p className="text-[11px] font-semibold text-wa-muted uppercase tracking-wide px-1 mb-2">Discover</p>
+                    <div className="flex flex-col gap-1">
+                      {(discoverList.filter((c) => !c.joined).slice(0, 6)).map((channel) => (
+                        <button
+                          key={channel.id}
+                          type="button"
+                          disabled={joiningChannelId === channel.id}
+                          onClick={() => handleQuickJoinChannel(channel)}
+                          className="flex items-center gap-3 w-full p-2.5 rounded-xl text-left bg-wa-surface/50 hover:bg-wa-surface border border-wa-border/50 transition-colors disabled:opacity-50"
+                        >
+                          <span className="w-9 h-9 rounded-full bg-wa-accent/15 text-wa-accent flex items-center justify-center text-sm font-bold shrink-0">#</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold truncate">{channel.name}</div>
+                            {channel.description && (
+                              <div className="text-xs text-wa-muted truncate">{channel.description}</div>
+                            )}
+                          </div>
+                          <span className="text-xs text-wa-accent shrink-0">
+                            {joiningChannelId === channel.id ? '…' : 'Join'}
+                          </span>
+                        </button>
+                      ))}
+                      {discoverList.filter((c) => !c.joined).length === 0 && (
+                        <p className="text-xs text-wa-muted px-2 py-2">You&apos;ve joined all recent channels — create one!</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {listSearchQuery.trim() && channelSearchResults.length > 0 && (
+                  <div className="px-1 py-2 mb-1">
+                    <p className="text-[11px] font-semibold text-wa-muted uppercase tracking-wide px-1 mb-2">Search results</p>
+                    {channelSearchResults.map((channel) => (
+                      <button
+                        key={`search-${channel.id}`}
+                        type="button"
+                        disabled={joiningChannelId === channel.id}
+                        onClick={() => handleQuickJoinChannel(channel)}
+                        className="flex items-center gap-3 w-full p-2.5 rounded-xl text-left hover:bg-wa-surface/70 transition-colors disabled:opacity-50"
+                      >
+                        <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate">{channel.name}</div>
+                          {channel.description && (
+                            <div className="text-xs text-wa-muted truncate">{channel.description}</div>
+                          )}
+                        </div>
+                        <span className="text-xs text-wa-accent shrink-0">
+                          {channel.joined ? 'Open' : joiningChannelId === channel.id ? '…' : 'Join'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[11px] font-semibold text-wa-muted uppercase tracking-wide px-2 pt-2 pb-1">
+                  {listSearchQuery.trim() ? 'Your channels' : 'Joined'}
+                </p>
+                {filteredChannelRooms.length === 0 ? (
+                  <p className="text-xs text-wa-muted px-2 py-4 text-center">
+                    {listSearchQuery.trim() ? 'No joined channels match' : 'No channels yet — browse or create one'}
+                  </p>
+                ) : (
+                  filteredChannelRooms.map((room) => renderChatItem(room))
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -1261,14 +1503,38 @@ export default function ChatPage() {
           )}
           <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
             {activeRoom?.type === 'direct' && activeRoom.peer && (
+              <>
+                <button
+                  type="button"
+                  className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
+                  onClick={() => handleStartCall('audio')}
+                  title="Voice call"
+                  aria-label="Voice call"
+                >
+                  📞
+                </button>
+                <button
+                  type="button"
+                  className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
+                  onClick={() => handleStartCall('video')}
+                  title="Video call"
+                  aria-label="Video call"
+                >
+                  📹
+                </button>
+              </>
+            )}
+            {activeRoom && (
               <button
                 type="button"
-                className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
-                onClick={handleStartCall}
-                title="Voice call"
-                aria-label="Voice call"
+                className={`touch-target w-10 h-10 rounded-lg flex items-center justify-center ${
+                  showMessageSearch ? 'bg-wa-accent/20 text-wa-accent' : 'text-wa-muted hover:text-slate-200 hover:bg-wa-surface'
+                }`}
+                onClick={() => setShowMessageSearch((v) => !v)}
+                title="Search messages"
+                aria-label="Search messages"
               >
-                📞
+                🔍
               </button>
             )}
             {activeRoom?.type === 'group' && (
@@ -1296,9 +1562,18 @@ export default function ChatPage() {
           </div>
         </header>
 
-        <div
-          className={`flex-1 overflow-y-auto overscroll-contain ${chatWallpaper} ${!activeRoom ? 'flex items-center justify-center' : ''}`}
-          ref={messagesAreaRef}
+        {showMessageSearch && activeRoom && (
+          <ChatMessageSearch
+            roomId={activeRoom.id}
+            onJumpToMessage={handleJumpToMessage}
+            onClose={() => setShowMessageSearch(false)}
+          />
+        )}
+
+        <ChatWallpaper
+          user={user}
+          innerRef={messagesAreaRef}
+          className={`flex-1 overflow-y-auto overscroll-contain ${!activeRoom ? 'flex items-center justify-center' : ''}`}
         >
           {!activeRoom && (
             <div className="text-center px-6 max-w-sm">
@@ -1317,7 +1592,13 @@ export default function ChatPage() {
             <p className="text-center text-xs text-wa-muted py-2 border-b border-wa-border mb-2">Beginning of conversation</p>
           )}
           {groupMessages(messages).map((msg) => (
-            <div key={msg.id} className={`py-0.5 ${!msg.grouped ? 'mt-3' : ''}`}>
+            <div
+              key={msg.id}
+              id={`msg-${msg.id}`}
+              className={`py-0.5 ${!msg.grouped ? 'mt-3' : ''} ${
+                highlightMessageId === msg.id ? 'ring-2 ring-wa-accent/60 rounded-lg -mx-1 px-1' : ''
+              }`}
+            >
               {!msg.grouped && !isOwn(msg) && (
                 <div className="flex items-center gap-2.5 mb-1">
                   <button
@@ -1468,7 +1749,7 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
           </div>
           )}
-        </div>
+        </ChatWallpaper>
 
         {replyingTo && activeRoom && (
           <div className="flex items-start gap-3 px-3 sm:px-5 py-3 border-t border-wa-border bg-wa-panel shrink-0">

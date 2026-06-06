@@ -142,16 +142,28 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
                     {followBusy ? '…' : profile.followed_by_me ? 'Unfollow' : 'Follow'}
                   </button>
                   {onCall && (
-                    <button
-                      type="button"
-                      className="w-full py-2.5 bg-wa-surface hover:bg-wa-border border border-wa-border rounded-lg text-slate-200 text-sm font-semibold"
-                      onClick={() => {
-                        onCall(profile);
-                        onClose();
-                      }}
-                    >
-                      📞 Voice call
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="flex-1 py-2.5 bg-wa-surface hover:bg-wa-border border border-wa-border rounded-lg text-slate-200 text-sm font-semibold"
+                        onClick={() => {
+                          onCall(profile, 'audio');
+                          onClose();
+                        }}
+                      >
+                        📞 Voice
+                      </button>
+                      <button
+                        type="button"
+                        className="flex-1 py-2.5 bg-wa-surface hover:bg-wa-border border border-wa-border rounded-lg text-slate-200 text-sm font-semibold"
+                        onClick={() => {
+                          onCall(profile, 'video');
+                          onClose();
+                        }}
+                      >
+                        📹 Video
+                      </button>
+                    </div>
                   )}
                   <button
                     type="button"

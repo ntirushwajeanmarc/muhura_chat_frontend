@@ -50,3 +50,8 @@ export async function createChannel({ name, description }) {
   const res = await axios.post(`${BACKEND_URL}/api/rooms`, { name, description });
   return res.data;
 }
+
+export async function discoverChannels() {
+  const res = await axios.get(`${BACKEND_URL}/api/rooms/discover`);
+  return res.data;
+}

@@ -34,9 +34,13 @@ export default function CallModal({
   onEnd,
   onDismissError,
   remoteAudioRef,
+  remoteVideoRef,
+  localVideoRef,
   isMuted,
+  isCameraOff,
   speakerOn,
   onToggleMute,
+  onToggleCamera,
   onToggleSpeaker,
 }) {
   if (!callState && !callError) return null;
@@ -59,39 +63,81 @@ export default function CallModal({
   }
 
   const { status, peer, callType } = callState;
+  const isVideo = callType === 'video';
   const isIncoming = status === 'incoming';
   const isActive = status === 'active';
   const isOutgoing = status === 'calling' || status === 'ringing';
   const label = STATUS_LABEL[status] || 'Calling…';
   const showControls = isActive || isIncoming;
+  const showVideo = isVideo && (isActive || isOutgoing);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-gradient-to-b from-wa-dark/95 to-black/95 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] bg-black flex flex-col">
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-      <div className="w-full max-w-sm text-center">
-        <div className={`relative inline-block ${isOutgoing ? 'animate-pulse-ring' : ''}`}>
-          <Avatar
-            username={peer?.username || '?'}
-            color={peer?.avatar_color}
-            avatarUrl={peer?.avatar_url}
-            size={96}
+
+      {showVideo && (
+        <div className="absolute inset-0">
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className="w-full h-full object-cover bg-black"
           />
+          {!isActive && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <Avatar
+                username={peer?.username || '?'}
+                color={peer?.avatar_color}
+                avatarUrl={peer?.avatar_url}
+                size={96}
+              />
+            </div>
+          )}
+          {isActive && (
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`absolute top-4 right-4 w-28 h-40 sm:w-32 sm:h-44 rounded-xl object-cover border-2 border-white/20 shadow-xl bg-black ${
+                isCameraOff ? 'opacity-0 pointer-events-none' : ''
+              }`}
+            />
+          )}
         </div>
-        <p className="mt-6 text-2xl font-semibold text-slate-50 tracking-tight">{peer?.username}</p>
+      )}
+
+      <div className={`relative z-10 flex-1 flex flex-col items-center justify-end pb-10 px-4 ${
+        showVideo ? 'bg-gradient-to-t from-black/90 via-black/40 to-transparent' : 'bg-gradient-to-b from-wa-dark/95 to-black/95 justify-center'
+      }`}>
+        {!showVideo && (
+          <div className={`text-center ${isOutgoing ? 'animate-pulse-ring' : ''}`}>
+            <Avatar
+              username={peer?.username || '?'}
+              color={peer?.avatar_color}
+              avatarUrl={peer?.avatar_url}
+              size={96}
+            />
+          </div>
+        )}
+
+        <p className={`text-2xl font-semibold text-slate-50 tracking-tight ${showVideo ? 'mt-auto' : 'mt-6'}`}>
+          {peer?.username}
+        </p>
         <p className="text-sm text-wa-accent/90 mt-2 font-medium">{label}</p>
         {isOutgoing && (
           <p className="text-xs text-wa-muted mt-1">Waiting for them to answer…</p>
         )}
         {isActive && (
           <p className="text-xs text-wa-muted mt-1">
-            {callType === 'video' ? 'Video call' : 'Voice call'}
-            {speakerOn ? ' · Speaker' : ' · Earpiece'}
+            {isVideo ? 'Video call' : 'Voice call'}
+            {!isVideo && (speakerOn ? ' · Speaker' : ' · Earpiece')}
           </p>
         )}
         {callError && <p className="text-xs text-red-400 mt-2">{callError}</p>}
 
         {showControls && (
-          <div className="flex justify-center gap-6 mt-10">
+          <div className="flex justify-center gap-5 sm:gap-6 mt-8 flex-wrap">
             {isActive && (
               <>
                 <CallControlButton
@@ -101,19 +147,30 @@ export default function CallModal({
                 >
                   {isMuted ? '🔇' : '🎤'}
                 </CallControlButton>
-                <CallControlButton
-                  active={speakerOn}
-                  label={speakerOn ? 'Speaker' : 'Earpiece'}
-                  onClick={onToggleSpeaker}
-                >
-                  {speakerOn ? '🔊' : '📱'}
-                </CallControlButton>
+                {isVideo && (
+                  <CallControlButton
+                    active={isCameraOff}
+                    label={isCameraOff ? 'Camera on' : 'Camera off'}
+                    onClick={onToggleCamera}
+                  >
+                    {isCameraOff ? '📷' : '📹'}
+                  </CallControlButton>
+                )}
+                {!isVideo && (
+                  <CallControlButton
+                    active={speakerOn}
+                    label={speakerOn ? 'Speaker' : 'Earpiece'}
+                    onClick={onToggleSpeaker}
+                  >
+                    {speakerOn ? '🔊' : '📱'}
+                  </CallControlButton>
+                )}
               </>
             )}
           </div>
         )}
 
-        <div className={`flex gap-4 justify-center ${showControls && isActive ? 'mt-8' : 'mt-10'}`}>
+        <div className={`flex gap-4 justify-center ${showControls && isActive ? 'mt-6' : 'mt-8'}`}>
           {isIncoming && (
             <>
               <CallControlButton label="Decline" onClick={onReject} variant="danger">

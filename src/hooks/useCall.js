@@ -18,10 +18,13 @@ export function useCall(socket, currentUser, connected) {
   const [callState, setCallState] = useState(null);
   const [callError, setCallError] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(() => getCallSettings().defaultSpeaker);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const localVideoRef = useRef(null);
   const activeCallIdRef = useRef(null);
   const pendingIceRef = useRef([]);
   const outputDevicesRef = useRef([]);
@@ -70,6 +73,11 @@ export function useCall(socket, currentUser, connected) {
     }
   }, [refreshOutputDevices]);
 
+  const bindStreamToVideo = useCallback((el, stream) => {
+    if (!el) return;
+    el.srcObject = stream || null;
+  }, []);
+
   const setMicMuted = useCallback((muted) => {
     setIsMuted(muted);
     localStreamRef.current?.getAudioTracks().forEach((track) => {
@@ -77,9 +85,20 @@ export function useCall(socket, currentUser, connected) {
     });
   }, []);
 
+  const setCameraEnabled = useCallback((enabled) => {
+    setIsCameraOff(!enabled);
+    localStreamRef.current?.getVideoTracks().forEach((track) => {
+      track.enabled = enabled;
+    });
+  }, []);
+
   const toggleMute = useCallback(() => {
     setMicMuted(!isMuted);
   }, [isMuted, setMicMuted]);
+
+  const toggleCamera = useCallback(() => {
+    setCameraEnabled(isCameraOff);
+  }, [isCameraOff, setCameraEnabled]);
 
   const toggleSpeaker = useCallback(() => {
     setSpeakerOn((prev) => {
@@ -102,12 +121,13 @@ export function useCall(socket, currentUser, connected) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = null;
-    }
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
     activeCallIdRef.current = null;
     pendingIceRef.current = [];
     setIsMuted(false);
+    setIsCameraOff(false);
     setCallState(null);
     setCallError(null);
   }, [stopRingtone]);
@@ -115,7 +135,9 @@ export function useCall(socket, currentUser, connected) {
   const getMedia = useCallback(async (withVideo = false) => {
     return navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: withVideo,
+      video: withVideo
+        ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+        : false,
     });
   }, []);
 
@@ -133,7 +155,7 @@ export function useCall(socket, currentUser, connected) {
     }
   }, []);
 
-  const createPeer = useCallback((callId, toUserId, stream) => {
+  const createPeer = useCallback((callId, toUserId, stream, isVideo) => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
     pc.onicecandidate = (event) => {
@@ -142,9 +164,13 @@ export function useCall(socket, currentUser, connected) {
       }
     };
     pc.ontrack = (event) => {
+      const remoteStream = event.streams[0];
       if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = event.streams[0];
+        remoteAudioRef.current.srcObject = remoteStream;
         applySpeakerOutput(speakerOn);
+      }
+      if (isVideo && remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStream;
       }
     };
     pcRef.current = pc;
@@ -160,14 +186,19 @@ export function useCall(socket, currentUser, connected) {
     setCallError(null);
     const settings = getCallSettings();
     setSpeakerOn(settings.defaultSpeaker);
+    const isVideo = callType === 'video';
     try {
       await refreshOutputDevices();
-      const stream = await getMedia(callType === 'video');
+      const stream = await getMedia(isVideo);
       localStreamRef.current = stream;
+      bindStreamToVideo(localVideoRef.current, stream);
       const callId = createCallId();
       activeCallIdRef.current = callId;
-      const pc = createPeer(callId, peerUser.id, stream);
-      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === 'video' });
+      const pc = createPeer(callId, peerUser.id, stream, isVideo);
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: isVideo,
+      });
       await pc.setLocalDescription(offer);
       socket.emit('call_invite', {
         toUserId: peerUser.id,
@@ -185,26 +216,36 @@ export function useCall(socket, currentUser, connected) {
       playRingtone(true);
     } catch (err) {
       cleanup();
-      setCallError(err.name === 'NotAllowedError' ? 'Microphone permission denied' : 'Could not start call');
+      const denied = err.name === 'NotAllowedError';
+      setCallError(
+        denied
+          ? (isVideo ? 'Camera or microphone permission denied' : 'Microphone permission denied')
+          : 'Could not start call'
+      );
       throw err;
     }
-  }, [socket, connected, getMedia, createPeer, cleanup, playRingtone, refreshOutputDevices]);
+  }, [socket, connected, getMedia, createPeer, cleanup, playRingtone, refreshOutputDevices, bindStreamToVideo]);
 
   const acceptCall = useCallback(async (invite) => {
     if (!socket?.connected || !invite) return;
     stopRingtone();
     const settings = getCallSettings();
     setSpeakerOn(settings.defaultSpeaker);
+    const isVideo = invite.callType === 'video';
     try {
       await refreshOutputDevices();
-      const stream = await getMedia(invite.callType === 'video');
+      const stream = await getMedia(isVideo);
       localStreamRef.current = stream;
+      bindStreamToVideo(localVideoRef.current, stream);
       activeCallIdRef.current = invite.callId;
-      const pc = createPeer(invite.callId, invite.from.id, stream);
+      const pc = createPeer(invite.callId, invite.from.id, stream, isVideo);
       const remoteSdp = normalizeSdp(invite.sdp);
       await pc.setRemoteDescription(remoteSdp);
       await flushPendingIce();
-      const answer = await pc.createAnswer({ offerToReceiveAudio: true });
+      const answer = await pc.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: isVideo,
+      });
       await pc.setLocalDescription(answer);
       socket.emit('call_answer', {
         toUserId: invite.from.id,
@@ -224,7 +265,7 @@ export function useCall(socket, currentUser, connected) {
       setCallError('Could not answer call');
       throw err;
     }
-  }, [socket, getMedia, createPeer, cleanup, stopRingtone, flushPendingIce, refreshOutputDevices]);
+  }, [socket, getMedia, createPeer, cleanup, stopRingtone, flushPendingIce, refreshOutputDevices, bindStreamToVideo]);
 
   const rejectCall = useCallback((invite) => {
     if (!socket || !invite) return;
@@ -249,6 +290,12 @@ export function useCall(socket, currentUser, connected) {
   }, [callState?.status, speakerOn, applySpeakerOutput]);
 
   useEffect(() => {
+    if (callState?.localStream) {
+      bindStreamToVideo(localVideoRef.current, callState.localStream);
+    }
+  }, [callState?.localStream, callState?.status, bindStreamToVideo]);
+
+  useEffect(() => {
     if (!socket) return undefined;
 
     const onInvite = (invite) => {
@@ -266,7 +313,8 @@ export function useCall(socket, currentUser, connected) {
       });
       playRingtone(false);
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification(`EganirA — call from ${invite.from?.username || 'someone'}`, {
+        const kind = invite.callType === 'video' ? 'Video' : 'Voice';
+        new Notification(`EganirA — ${kind} call from ${invite.from?.username || 'someone'}`, {
           icon: '/logo.png',
           tag: `call-${invite.callId}`,
           silent: false,
@@ -343,14 +391,18 @@ export function useCall(socket, currentUser, connected) {
     callState,
     callError,
     isMuted,
+    isCameraOff,
     speakerOn,
     startCall,
     acceptCall,
     rejectCall,
     endCall,
     toggleMute,
+    toggleCamera,
     toggleSpeaker,
     remoteAudioRef,
+    remoteVideoRef,
+    localVideoRef,
     cleanup,
     clearCallError: () => setCallError(null),
   };
