@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { searchChannels, joinChannel } from '../api/chats';
 
-export default function ChannelSearchModal({ onJoin, onClose }) {
+export default function ChannelSearchModal({ onJoin, onClose, onCreate }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -80,6 +80,18 @@ export default function ChannelSearchModal({ onJoin, onClose }) {
           <p className="mx-4 mt-2 text-sm text-red-400">{error}</p>
         )}
 
+        {onCreate && (
+          <div className="px-4 pb-2">
+            <button
+              type="button"
+              className="text-sm text-wa-accent hover:text-wa-accent-hover font-medium"
+              onClick={onCreate}
+            >
+              + Create a new channel
+            </button>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-2 min-h-[200px] max-h-[360px]">
           {query.trim().length < 1 && (
             <p className="text-center text-wa-muted text-sm py-4">
@@ -87,7 +99,18 @@ export default function ChannelSearchModal({ onJoin, onClose }) {
             </p>
           )}
           {query.trim().length > 0 && !loading && results.length === 0 && (
-            <p className="text-center text-wa-muted text-sm py-4">No channels found</p>
+            <div className="text-center py-4 px-3">
+              <p className="text-wa-muted text-sm">No channels found</p>
+              {onCreate && (
+                <button
+                  type="button"
+                  className="mt-2 text-sm text-wa-accent hover:text-wa-accent-hover font-medium"
+                  onClick={() => onCreate(query.trim())}
+                >
+                  Create &ldquo;{query.trim()}&rdquo; as a new channel
+                </button>
+              )}
+            </div>
           )}
           {results.map((channel) => (
             <button

@@ -40,3 +40,8 @@ export async function joinChannel(roomId) {
   const res = await axios.post(`${BACKEND_URL}/api/rooms/${roomId}/join`);
   return res.data;
 }
+
+export async function createChannel({ name, description }) {
+  const res = await axios.post(`${BACKEND_URL}/api/rooms`, { name, description });
+  return res.data;
+}

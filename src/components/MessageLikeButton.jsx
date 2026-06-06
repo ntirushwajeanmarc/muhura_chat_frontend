@@ -29,13 +29,14 @@ export default function MessageLikeButton({ messageId, likes, onUpdate }) {
   return (
     <button
       type="button"
-      className={`${btnClass} ${liked ? 'text-pink-400 hover:text-pink-300' : 'text-wa-muted hover:text-pink-400'}`}
+      className={`${btnClass} ${liked ? 'text-pink-400 hover:text-red-300' : 'text-wa-muted hover:text-pink-400'}`}
       onClick={handleClick}
       disabled={busy}
-      title={liked ? 'Unlike' : 'Like'}
+      title={liked ? 'Tap to unlike' : 'Like this message'}
       aria-label={liked ? 'Unlike message' : 'Like message'}
     >
       <span>{liked ? '❤️' : '🤍'}</span>
+      <span className="hidden xs:inline">{liked ? 'Unlike' : 'Like'}</span>
       {count > 0 && <span className="font-semibold">{count}</span>}
     </button>
   );

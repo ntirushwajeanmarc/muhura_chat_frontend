@@ -9,6 +9,7 @@ import {
   setNotificationPrefs,
   requestNotificationPermission,
 } from '../utils/notifications';
+import { ensurePushSubscription } from '../utils/pushSubscription';
 
 const inputClass =
   'w-full px-3.5 py-2.5 bg-wa-surface border border-wa-border rounded-lg text-slate-100 text-sm outline-none focus:border-wa-accent';
@@ -255,13 +256,16 @@ export default function SettingsModal({ onClose }) {
                       type="checkbox"
                       className="w-4 h-4 accent-wa-accent"
                       checked={notifPrefs.enabled}
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const next = { ...notifPrefs, enabled: e.target.checked };
                         setNotifPrefs(next);
                         setNotificationPrefs(next);
+                        if (next.enabled && Notification.permission === 'granted') {
+                          await ensurePushSubscription();
+                        }
                       }}
                     />
-                    <span className="text-sm">Message alerts &amp; sounds</span>
+                    <span className="text-sm">Message &amp; call alerts (works when app is closed)</span>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input
@@ -283,17 +287,22 @@ export default function SettingsModal({ onClose }) {
                       onClick={async () => {
                         const result = await requestNotificationPermission();
                         setNotifPermission(result);
-                        if (result === 'granted') setSuccess('Browser notifications enabled');
+                        if (result === 'granted') {
+                          await ensurePushSubscription();
+                          setSuccess('Notifications enabled — alerts work in background too');
+                        }
                         else if (result === 'denied') setError('Notifications blocked — enable them in browser settings');
                       }}
                     >
                       {notifPermission === 'denied'
                         ? 'Notifications blocked by browser'
-                        : 'Enable browser notifications (like WhatsApp)'}
+                        : 'Enable notifications for messages & calls'}
                     </button>
                   )}
                   {notifPermission === 'granted' && (
-                    <p className="text-xs text-green-400">Browser notifications are on</p>
+                    <p className="text-xs text-green-400">
+                      Notifications on — you will hear alerts even when EganirA is in the background
+                    </p>
                   )}
                 </div>
               </div>

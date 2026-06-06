@@ -7,6 +7,7 @@ import {
   notifyPwaUpdateAvailable,
   checkForPwaUpdate,
 } from './utils/pwaUpdate';
+import { setupPushNotifications } from './utils/pushSubscription';
 
 const UPDATE_CHECK_MS = 15 * 60 * 1000;
 
@@ -17,6 +18,8 @@ const updateSW = registerSW({
   },
   onRegisteredSW(_swUrl, registration) {
     if (!registration) return;
+
+    setupPushNotifications(registration);
 
     setInterval(() => registration.update(), UPDATE_CHECK_MS);
 

@@ -14,9 +14,18 @@ export function setNotificationPrefs(prefs) {
 
 export async function requestNotificationPermission() {
   if (!('Notification' in window)) return 'unsupported';
-  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'granted') {
+    const { ensurePushSubscription } = await import('./pushSubscription');
+    ensurePushSubscription();
+    return 'granted';
+  }
   if (Notification.permission === 'denied') return 'denied';
-  return Notification.requestPermission();
+  const result = await Notification.requestPermission();
+  if (result === 'granted') {
+    const { ensurePushSubscription } = await import('./pushSubscription');
+    ensurePushSubscription();
+  }
+  return result;
 }
 
 export function canNotify() {

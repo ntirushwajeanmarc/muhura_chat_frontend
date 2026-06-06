@@ -8,8 +8,8 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [liking, setLiking] = useState(false);
-  const [following, setFollowing] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
   const [error, setError] = useState('');
 
   const isOwn = user?.id === userId;
@@ -24,8 +24,9 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
   }, [userId]);
 
   const handleFollow = async () => {
-    if (isOwn || following) return;
-    setFollowing(true);
+    if (isOwn || followBusy) return;
+    setFollowBusy(true);
+    setError('');
     try {
       const data = await toggleFollow(userId);
       setProfile((prev) => ({
@@ -36,13 +37,14 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
     } catch {
       setError('Could not update follow');
     } finally {
-      setFollowing(false);
+      setFollowBusy(false);
     }
   };
 
   const handleLike = async () => {
-    if (isOwn || liking) return;
-    setLiking(true);
+    if (isOwn || likeBusy) return;
+    setLikeBusy(true);
+    setError('');
     try {
       const data = await toggleProfileLike(userId);
       setProfile((prev) => ({
@@ -53,7 +55,7 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
     } catch {
       setError('Could not update like');
     } finally {
-      setLiking(false);
+      setLikeBusy(false);
     }
   };
 
@@ -130,13 +132,14 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
                     type="button"
                     className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                       profile.followed_by_me
-                        ? 'bg-wa-surface text-wa-muted border border-wa-border hover:text-slate-200'
+                        ? 'bg-wa-surface text-slate-200 border border-wa-border hover:bg-red-500/15 hover:text-red-300 hover:border-red-500/40'
                         : 'bg-sky-600 hover:bg-sky-500 text-white'
                     }`}
                     onClick={handleFollow}
-                    disabled={following}
+                    disabled={followBusy}
+                    title={profile.followed_by_me ? 'Tap to unfollow' : 'Follow this user'}
                   >
-                    {following ? '…' : profile.followed_by_me ? '✓ Following' : '+ Follow'}
+                    {followBusy ? '…' : profile.followed_by_me ? 'Unfollow' : 'Follow'}
                   </button>
                   {onCall && (
                     <button
@@ -154,13 +157,14 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
                     type="button"
                     className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                       profile.liked_by_me
-                        ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 hover:bg-pink-500/30'
+                        ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 hover:bg-red-500/15 hover:text-red-300 hover:border-red-500/40'
                         : 'bg-wa-accent hover:bg-wa-accent-hover text-white'
                     }`}
                     onClick={handleLike}
-                    disabled={liking}
+                    disabled={likeBusy}
+                    title={profile.liked_by_me ? 'Tap to unlike' : 'Like this profile'}
                   >
-                    {liking ? '…' : profile.liked_by_me ? '❤️ Liked' : '🤍 Like profile'}
+                    {likeBusy ? '…' : profile.liked_by_me ? '❤️ Unlike' : '🤍 Like profile'}
                   </button>
                 </div>
               )}

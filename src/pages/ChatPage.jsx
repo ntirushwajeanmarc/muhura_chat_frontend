@@ -30,6 +30,7 @@ import {
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useCall } from '../hooks/useCall';
 import ChannelSearchModal from '../components/ChannelSearchModal';
+import CreateChannelModal from '../components/CreateChannelModal';
 import WallpaperPicker from '../components/WallpaperPicker';
 import CallModal from '../components/CallModal';
 import { wallpaperClass } from '../utils/wallpapers';
@@ -89,6 +90,8 @@ export default function ChatPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [showChannelSearch, setShowChannelSearch] = useState(false);
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [createChannelName, setCreateChannelName] = useState('');
   const [showWallpaper, setShowWallpaper] = useState(false);
   const [groupMemberIds, setGroupMemberIds] = useState([]);
   const [profileUserId, setProfileUserId] = useState(null);
@@ -203,6 +206,28 @@ export default function ChatPage() {
       if (window.matchMedia('(max-width: 767px)').matches) setMobileShowList(false);
     }
   }, [findRoomById]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onSwMessage = (event) => {
+      if (event.data?.type === 'eganira_notification' && event.data.roomId) {
+        openRoomById(event.data.roomId);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onSwMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onSwMessage);
+  }, [openRoomById]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get('room');
+    if (!roomId) return;
+    const room = findRoomById(roomId);
+    if (room) {
+      openRoomById(roomId);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [directChats, groupChats, publicRooms, findRoomById, openRoomById]);
 
   const SCROLL_THRESHOLD = 80;
   const LOAD_OLDER_THRESHOLD = 120;
@@ -663,6 +688,11 @@ export default function ChatPage() {
     selectRoom(room);
   };
 
+  const handleCreateChannel = (room) => {
+    handleChannelJoin(room);
+    setShowCreateChannel(false);
+  };
+
   const openAddMembers = async () => {
     if (!activeRoom?.id) return;
     try {
@@ -864,10 +894,25 @@ export default function ChatPage() {
           onClose={() => setShowAddMembers(false)}
         />
       )}
+      {showCreateChannel && (
+        <CreateChannelModal
+          initialName={createChannelName}
+          onCreate={handleCreateChannel}
+          onClose={() => {
+            setShowCreateChannel(false);
+            setCreateChannelName('');
+          }}
+        />
+      )}
       {showChannelSearch && (
         <ChannelSearchModal
           onJoin={handleChannelJoin}
           onClose={() => setShowChannelSearch(false)}
+          onCreate={(name = '') => {
+            setCreateChannelName(name);
+            setShowChannelSearch(false);
+            setShowCreateChannel(true);
+          }}
         />
       )}
       {showWallpaper && (
@@ -1039,16 +1084,28 @@ export default function ChatPage() {
             <div className="mb-2">
               <div className="flex items-center justify-between px-2 mb-1">
                 <p className="section-label mb-0">Channels</p>
-                <button
-                  type="button"
-                  className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
-                  onClick={() => setShowChannelSearch(true)}
-                >
-                  Find
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
+                    onClick={() => {
+                      setCreateChannelName('');
+                      setShowCreateChannel(true);
+                    }}
+                  >
+                    Create
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[11px] text-wa-accent hover:text-wa-accent-hover font-medium"
+                    onClick={() => setShowChannelSearch(true)}
+                  >
+                    Find
+                  </button>
+                </div>
               </div>
               {sortedPublicRooms.length === 0 ? (
-                <p className="text-xs text-wa-muted px-2 py-1">Search to join channels</p>
+                <p className="text-xs text-wa-muted px-2 py-1">Create or find channels to join</p>
               ) : (
                 sortedPublicRooms.map((room) => {
                   const unreadCount = unread[room.id] || 0;
