@@ -38,3 +38,13 @@ export async function toggleFollow(userId) {
   const res = await axios.post(`${BACKEND_URL}/api/social/follow/${userId}`);
   return res.data;
 }
+
+export async function fetchFollowers(userId) {
+  const res = await axios.get(`${BACKEND_URL}/api/social/followers/${userId}`);
+  return res.data.users || [];
+}
+
+export async function fetchFollowing(userId) {
+  const res = await axios.get(`${BACKEND_URL}/api/social/following/${userId}`);
+  return res.data.users || [];
+}

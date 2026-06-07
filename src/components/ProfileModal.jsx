@@ -3,14 +3,16 @@ import { useAuth } from '../context/AuthContext';
 import { fetchUserProfile, toggleProfileLike } from '../api/likes';
 import { toggleFollow } from '../api/social';
 import Avatar from './Avatar';
+import FollowListModal from './FollowListModal';
 
-export default function ProfileModal({ userId, onClose, onEditProfile, onCall }) {
+export default function ProfileModal({ userId, onClose, onEditProfile, onCall, onOpenProfile }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [likeBusy, setLikeBusy] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [error, setError] = useState('');
+  const [followList, setFollowList] = useState(null);
 
   const isOwn = user?.id === userId;
 
@@ -63,7 +65,29 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
     ? `${profile.username} ${profile.surname}`
     : profile?.username;
 
+  const openFollowList = (type) => {
+    setFollowList({
+      type,
+      title: type === 'followers'
+        ? `${profile?.follower_count || 0} followers`
+        : `${profile?.following_count || 0} following`,
+    });
+  };
+
   return (
+    <>
+    {followList && (
+      <FollowListModal
+        userId={userId}
+        type={followList.type}
+        title={followList.title}
+        onClose={() => setFollowList(null)}
+        onSelectUser={(id) => {
+          setFollowList(null);
+          if (id !== userId) onOpenProfile?.(id);
+        }}
+      />
+    )}
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5" onClick={onClose}>
       <div
         className="bg-wa-panel border border-wa-border rounded-xl w-full max-w-sm shadow-2xl"
@@ -102,14 +126,22 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
                 <p className="text-sm text-wa-muted">📱 {profile.phone}</p>
               )}
               <div className="flex items-center gap-4 pt-2 flex-wrap justify-center">
-                <span className="text-sm text-wa-muted">
+                <button
+                  type="button"
+                  className="text-sm text-wa-muted hover:text-slate-200 transition-colors"
+                  onClick={() => openFollowList('followers')}
+                >
                   <span className="font-semibold text-slate-200">{profile.follower_count || 0}</span>
                   {' '}followers
-                </span>
-                <span className="text-sm text-wa-muted">
+                </button>
+                <button
+                  type="button"
+                  className="text-sm text-wa-muted hover:text-slate-200 transition-colors"
+                  onClick={() => openFollowList('following')}
+                >
                   <span className="font-semibold text-slate-200">{profile.following_count || 0}</span>
                   {' '}following
-                </span>
+                </button>
                 <span className="text-sm text-wa-muted">
                   <span className="font-semibold text-pink-400">{profile.like_count || 0}</span>
                   {' '}likes
@@ -185,5 +217,6 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall })
         </div>
       </div>
     </div>
+    </>
   );
 }

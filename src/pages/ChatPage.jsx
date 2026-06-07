@@ -36,6 +36,8 @@ import {
   messagePreview,
   requestNotificationPermission,
   getNotificationPrefs,
+  canNotify,
+  playNotificationSound,
 } from '../utils/notifications';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useCall } from '../hooks/useCall';
@@ -622,6 +624,24 @@ export default function ChatPage() {
     const offStar = on('star_posted', () => {
       loadStarsFeed();
     });
+    const offFollower = on('new_follower', ({ follower }) => {
+      if (!follower?.username) return;
+      const body = `${follower.username} started following you`;
+      if (canNotify()) {
+        const notification = new Notification('EganirA', {
+          body,
+          icon: '/logo.png',
+          tag: `follow-${follower.id}`,
+        });
+        notification.onclick = () => {
+          window.focus();
+          setProfileUserId(follower.id);
+          notification.close();
+        };
+      } else {
+        playNotificationSound();
+      }
+    });
     return () => {
       offMsg?.();
       offRoom?.();
@@ -633,6 +653,7 @@ export default function ChatPage() {
       offLike?.();
       offRead?.();
       offStar?.();
+      offFollower?.();
     };
   }, [connected, on, refreshChats, openRoomById, joinRoom, loadStarsFeed]);
 
@@ -1080,6 +1101,7 @@ export default function ChatPage() {
         <ProfileModal
           userId={profileUserId}
           onClose={() => setProfileUserId(null)}
+          onOpenProfile={(id) => setProfileUserId(id)}
           onEditProfile={() => setShowSettings(true)}
           onCall={profileUserId !== user?.id ? async (profile, callType = 'audio') => {
             try {
