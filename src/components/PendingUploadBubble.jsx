@@ -13,7 +13,7 @@ export default function PendingUploadBubble({ file, progress, previewUrl, captio
 
   return (
     <div className="flex justify-end mt-3">
-      <div className="relative inline-block max-w-[min(65%,520px)] bg-wa-bubble rounded-lg rounded-br-sm shadow-sm overflow-hidden">
+      <div className="relative w-fit max-w-[min(88%,400px)] bg-wa-bubble rounded-2xl rounded-br-md shadow-sm overflow-hidden">
         {isImage && previewUrl ? (
           <div className="relative">
             <img

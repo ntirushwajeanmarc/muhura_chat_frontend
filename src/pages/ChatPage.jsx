@@ -1682,12 +1682,12 @@ export default function ChatPage() {
                   <span className="text-[11px] text-wa-muted">{formatTime(msg.created_at)}</span>
                 </div>
               )}
-              <div className={`flex ${isOwn(msg) ? 'justify-end' : ''} ${!isOwn(msg) ? 'pl-[42px]' : ''}`}>
+              <div className={`group flex ${isOwn(msg) ? 'justify-end' : ''} ${!isOwn(msg) ? 'pl-[42px]' : ''}`}>
                 <div
-                  className={`inline-block max-w-[min(92%,520px)] sm:max-w-[min(80%,520px)] md:max-w-[min(65%,520px)] text-sm leading-relaxed shadow-sm min-w-0 ${
+                  className={`relative w-fit max-w-[min(88%,400px)] sm:max-w-[min(78%,440px)] text-sm leading-snug shadow-sm ${
                     isOwn(msg)
-                      ? 'bg-wa-bubble rounded-lg rounded-br-sm px-3 py-2.5'
-                      : 'bg-wa-surface rounded-lg rounded-bl-sm px-3 py-2.5'
+                      ? 'bg-wa-bubble rounded-2xl rounded-br-md px-2.5 py-1.5 sm:px-3 sm:py-2'
+                      : 'bg-wa-surface rounded-2xl rounded-bl-md px-2.5 py-1.5 sm:px-3 sm:py-2'
                   }`}
                 >
                   {msg.reply_to && (
@@ -1697,8 +1697,19 @@ export default function ChatPage() {
                     </div>
                   )}
                   {msg.attachment && (
-                    <div className={`${msg.content || msg.reply_to ? 'mb-2' : ''}`}>
+                    <div className={`${msg.content || msg.reply_to ? 'mb-1.5' : ''}`}>
                       <MessageAttachment attachment={msg.attachment} />
+                    </div>
+                  )}
+                  {!msg.content && msg.attachment && editingMessageId !== msg.id && (
+                    <div className={`inline-flex items-center gap-1 mt-0.5 ${isOwn(msg) ? 'float-right clear-both' : ''}`}>
+                      {msg.edited_at && <span className="text-[10px] text-wa-muted italic">edited</span>}
+                      <span className="text-[10px] text-wa-muted/90">{formatTime(msg.created_at)}</span>
+                      {isOwn(msg) && activeRoom?.type !== 'public' && (
+                        <MessageReceipt
+                          status={getMessageReceiptStatus(msg, activeRoom, roomReads[activeRoom?.id], user?.id)}
+                        />
+                      )}
                     </div>
                   )}
                   {editingMessageId === msg.id ? (
@@ -1732,64 +1743,79 @@ export default function ChatPage() {
                     </div>
                   ) : (
                     msg.content && (
-                      <div className="break-words min-w-0">
-                        <MessageContent content={msg.content} />
+                      <div className={`flex flex-wrap items-end gap-x-2 gap-y-0.5 ${isOwn(msg) ? 'justify-end' : 'justify-start'}`}>
+                        <div className="min-w-0 break-words">
+                          <MessageContent content={msg.content} />
+                        </div>
+                        <div className="inline-flex items-center gap-1 shrink-0 self-end pb-0.5">
+                          {msg.edited_at && (
+                            <span className="text-[10px] text-wa-muted italic">edited</span>
+                          )}
+                          {(isOwn(msg) || msg.grouped) && (
+                            <span className="text-[10px] text-wa-muted/90">{formatTime(msg.created_at)}</span>
+                          )}
+                          {isOwn(msg) && activeRoom?.type !== 'public' && (
+                            <MessageReceipt
+                              status={getMessageReceiptStatus(
+                                msg,
+                                activeRoom,
+                                roomReads[activeRoom?.id],
+                                user?.id
+                              )}
+                            />
+                          )}
+                        </div>
                       </div>
                     )
                   )}
+                  {editingMessageId !== msg.id && (msg.likes?.count > 0) && (
+                    <div className={`flex mt-0.5 ${isOwn(msg) ? 'justify-end' : 'justify-start'}`}>
+                      <MessageLikeButton
+                        messageId={msg.id}
+                        likes={msg.likes}
+                        onUpdate={(likes) => updateMessageLikes(msg.id, likes)}
+                      />
+                    </div>
+                  )}
                   {editingMessageId !== msg.id && (
-                    <div className="flex items-center justify-end gap-0.5 mt-2 pt-2 border-t border-white/10">
+                    <div
+                      className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ${
+                        isOwn(msg) ? 'right-full mr-1' : 'left-full ml-1'
+                      }`}
+                    >
                       <ReplyButton
                         onClick={() => startReply(msg)}
-                        className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-white/10 transition-colors"
+                        className="flex items-center justify-center w-7 h-7 rounded-full bg-wa-panel/95 border border-wa-border text-wa-muted hover:text-slate-200 shadow-md"
                       />
                       {isOwn(msg) && (
                         <EditButton
                           onClick={() => startEdit(msg)}
-                          className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-white/10 transition-colors"
+                          className="flex items-center justify-center w-7 h-7 rounded-full bg-wa-panel/95 border border-wa-border text-wa-muted hover:text-slate-200 shadow-md"
                         />
                       )}
                       {msg.content && (
                         <CopyButton
                           text={msg.content}
                           title="Copy message"
-                          className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-white/10 transition-colors"
+                          className="flex items-center justify-center w-7 h-7 rounded-full bg-wa-panel/95 border border-wa-border text-wa-muted hover:text-slate-200 shadow-md"
                         />
                       )}
-                    </div>
-                  )}
-                  {editingMessageId !== msg.id && (
-                    <div className={`flex items-center gap-2 mt-1.5 ${isOwn(msg) ? 'justify-end' : 'justify-start'}`}>
-                      <MessageLikeButton
-                        messageId={msg.id}
-                        likes={msg.likes || { count: 0, liked_by_me: false }}
-                        onUpdate={(likes) => updateMessageLikes(msg.id, likes)}
-                      />
-                    </div>
-                  )}
-                  {isOwn(msg) && editingMessageId !== msg.id && (
-                    <div className="flex items-center justify-end gap-1.5 mt-1.5 pt-0.5">
-                      {msg.edited_at && (
-                        <span className="text-[10px] text-wa-muted italic shrink-0">edited</span>
-                      )}
-                      <span className="text-[10px] text-wa-muted shrink-0">{formatTime(msg.created_at)}</span>
-                      {activeRoom?.type !== 'public' && (
-                        <MessageReceipt
-                          status={getMessageReceiptStatus(
-                            msg,
-                            activeRoom,
-                            roomReads[activeRoom?.id],
-                            user?.id
-                          )}
-                        />
+                      {(msg.likes?.count ?? 0) === 0 && (
+                        <span className="inline-flex">
+                          <MessageLikeButton
+                            messageId={msg.id}
+                            likes={msg.likes || { count: 0, liked_by_me: false }}
+                            onUpdate={(likes) => updateMessageLikes(msg.id, likes)}
+                          />
+                        </span>
                       )}
                     </div>
                   )}
-                  {!isOwn(msg) && msg.edited_at && editingMessageId !== msg.id && (
-                    <span className="block text-[10px] text-wa-muted text-right mt-1 italic">edited</span>
+                  {!isOwn(msg) && !msg.content && msg.edited_at && editingMessageId !== msg.id && (
+                    <span className="block text-[10px] text-wa-muted text-right mt-0.5 italic">edited</span>
                   )}
-                  {!isOwn(msg) && msg.grouped && (
-                    <span className="block text-[10px] text-wa-muted text-right mt-1">{formatTime(msg.created_at)}</span>
+                  {!isOwn(msg) && !msg.content && msg.grouped && editingMessageId !== msg.id && (
+                    <span className="block text-[10px] text-wa-muted text-right mt-0.5">{formatTime(msg.created_at)}</span>
                   )}
                 </div>
               </div>
