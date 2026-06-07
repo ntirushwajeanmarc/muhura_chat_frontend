@@ -104,7 +104,7 @@ function sumUnread(rooms, unread) {
 
 export default function ChatPage() {
   const { user, token, logout, updateSession } = useAuth();
-  const { joinRoom, joinRooms, setPresenceRoom, sendMessage, sendTyping, markRead, on, connected, socket } = useSocket(token);
+  const { joinRoom, joinRooms, setPresenceRoom, syncPresence, sendMessage, sendTyping, markRead, on, connected, socket } = useSocket(token);
   const {
     callState,
     callError,
@@ -570,17 +570,19 @@ export default function ChatPage() {
       setOnlineUsers(users || []);
     });
     const offPresenceSnapshot = on('presence_snapshot', ({ onlineUserIds: ids }) => {
-      setOnlineUserIds(new Set(ids || []));
+      setOnlineUserIds(new Set((ids || []).map(String)));
     });
     const offUserPresence = on('user_presence', ({ userId, online }) => {
       if (!userId) return;
+      const id = String(userId);
       setOnlineUserIds((prev) => {
         const next = new Set(prev);
-        if (online) next.add(userId);
-        else next.delete(userId);
+        if (online) next.add(id);
+        else next.delete(id);
         return next;
       });
     });
+    syncPresence();
     const offTyping = on('user_typing', ({ username, isTyping, roomId }) => {
       if (roomId !== activeRoomIdRef.current) return;
       if (username === userRef.current?.username) return;
@@ -655,7 +657,7 @@ export default function ChatPage() {
       offStar?.();
       offFollower?.();
     };
-  }, [connected, on, refreshChats, openRoomById, joinRoom, loadStarsFeed]);
+  }, [connected, on, syncPresence, refreshChats, openRoomById, joinRoom, loadStarsFeed]);
 
   useEffect(() => {
     if (stickToBottomRef.current) {
@@ -969,7 +971,7 @@ export default function ChatPage() {
     );
   };
 
-  const isUserOnline = (userId) => Boolean(userId && onlineUserIds.has(userId));
+  const isUserOnline = (userId) => Boolean(userId && onlineUserIds.has(String(userId)));
 
   const avatarWithPresence = (username, color, avatarUrl, size, userId) => (
     <div className="relative shrink-0">

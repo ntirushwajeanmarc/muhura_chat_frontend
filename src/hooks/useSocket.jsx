@@ -72,6 +72,10 @@ export const useSocket = (token) => {
     if (roomId) socketRef.current?.emit('presence_room', roomId);
   }, []);
 
+  const syncPresence = useCallback(() => {
+    socketRef.current?.emit('presence_sync');
+  }, []);
+
   const sendMessage = useCallback((roomId, content, replyToId = null) => {
     socketRef.current?.emit('send_message', { roomId, content, replyToId });
   }, []);
@@ -101,6 +105,7 @@ export const useSocket = (token) => {
     joinRoom,
     joinRooms,
     setPresenceRoom,
+    syncPresence,
     sendMessage,
     editMessage,
     markRead,
