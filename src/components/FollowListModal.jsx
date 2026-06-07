@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { fetchFollowers, fetchFollowing } from '../api/social';
 import Avatar from './Avatar';
 
@@ -18,8 +19,8 @@ export default function FollowListModal({ userId, type, title, onClose, onSelect
       .finally(() => setLoading(false));
   }, [userId, type]);
 
-  return (
-    <div className="fixed inset-0 z-[55] bg-black/60 flex items-center justify-center p-5" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-5" onClick={onClose}>
       <div
         className="bg-wa-panel border border-wa-border rounded-xl w-full max-w-sm shadow-2xl max-h-[70vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -62,6 +63,7 @@ export default function FollowListModal({ userId, type, title, onClose, onSelect
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

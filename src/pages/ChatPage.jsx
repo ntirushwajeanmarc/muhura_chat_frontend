@@ -1468,8 +1468,8 @@ export default function ChatPage() {
               <button
                 type="button"
                 className="text-sm font-semibold flex-1 truncate text-left hover:text-wa-accent"
-                onClick={() => setShowSettings(true)}
-                title="Edit profile"
+                onClick={() => openProfile(user?.id)}
+                title="My profile"
               >
                 {user?.username}
               </button>

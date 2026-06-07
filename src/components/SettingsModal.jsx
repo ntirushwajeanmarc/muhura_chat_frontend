@@ -11,6 +11,7 @@ import {
 } from '../utils/notifications';
 import { ensurePushSubscription } from '../utils/pushSubscription';
 import { getCallSettings, setCallSettings } from '../utils/callSettings';
+import FollowListModal from './FollowListModal';
 
 const inputClass =
   'w-full px-3.5 py-2.5 bg-wa-surface border border-wa-border rounded-lg text-slate-100 text-sm outline-none focus:border-wa-accent';
@@ -27,6 +28,9 @@ export default function SettingsModal({ onClose }) {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [likeCount, setLikeCount] = useState(0);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followList, setFollowList] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -53,6 +57,8 @@ export default function SettingsModal({ onClose }) {
         setEmail(profile.email);
         setUsername(profile.username);
         setLikeCount(profile.like_count || 0);
+        setFollowerCount(profile.follower_count || 0);
+        setFollowingCount(profile.following_count || 0);
       })
       .catch(() => setError('Could not load profile'))
       .finally(() => setLoading(false));
@@ -129,7 +135,25 @@ export default function SettingsModal({ onClose }) {
     }
   };
 
+  const openFollowList = (type) => {
+    setFollowList({
+      type,
+      title: type === 'followers'
+        ? `${followerCount} followers`
+        : `${followingCount} following`,
+    });
+  };
+
   return (
+    <>
+    {followList && user?.id && (
+      <FollowListModal
+        userId={user.id}
+        type={followList.type}
+        title={followList.title}
+        onClose={() => setFollowList(null)}
+      />
+    )}
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5" onClick={onClose}>
       <div
         className="bg-wa-panel border border-wa-border rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl"
@@ -190,7 +214,23 @@ export default function SettingsModal({ onClose }) {
                 </div>
               </div>
 
-              <div className="text-center py-1">
+              <div className="flex items-center justify-center gap-4 py-1 flex-wrap">
+                <button
+                  type="button"
+                  className="text-sm text-wa-muted hover:text-slate-200 transition-colors"
+                  onClick={() => openFollowList('followers')}
+                >
+                  <span className="font-semibold text-slate-200">{followerCount}</span>
+                  {' '}followers
+                </button>
+                <button
+                  type="button"
+                  className="text-sm text-wa-muted hover:text-slate-200 transition-colors"
+                  onClick={() => openFollowList('following')}
+                >
+                  <span className="font-semibold text-slate-200">{followingCount}</span>
+                  {' '}following
+                </button>
                 <span className="text-sm text-wa-muted">
                   <span className="text-pink-400 font-bold text-lg">{likeCount}</span>
                   {' '}profile {likeCount === 1 ? 'like' : 'likes'}
@@ -383,5 +423,6 @@ export default function SettingsModal({ onClose }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
