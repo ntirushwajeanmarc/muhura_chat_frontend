@@ -1691,10 +1691,15 @@ export default function ChatPage() {
                   }`}
                 >
                   {msg.reply_to && (
-                    <div className="flex flex-col gap-0.5 mb-2 p-2 border-l-[3px] border-wa-accent rounded bg-black/20 text-xs max-w-full">
+                    <button
+                      type="button"
+                      className="flex flex-col gap-0.5 mb-2 p-2 border-l-[3px] border-wa-accent rounded bg-black/20 text-xs max-w-full text-left w-full hover:bg-black/30 cursor-pointer transition-colors"
+                      onClick={() => msg.reply_to?.id && handleJumpToMessage(msg.reply_to.id)}
+                      title="Jump to original message"
+                    >
                       <span className="font-semibold text-wa-accent-hover">@{msg.reply_to.username}</span>
                       <span className="text-wa-muted break-words line-clamp-3">{truncateReply(msg.reply_to.content)}</span>
-                    </div>
+                    </button>
                   )}
                   {msg.attachment && (
                     <div className={`${msg.content || msg.reply_to ? 'mb-1.5' : ''}`}>
