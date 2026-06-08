@@ -29,8 +29,9 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-full flex items-center justify-center chat-wallpaper bg-wa-dark px-4 py-6 sm:p-6">
-      <div className="bg-wa-panel border border-wa-border rounded-2xl p-6 sm:p-10 w-full max-w-md shadow-2xl">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-contain chat-wallpaper bg-wa-dark">
+      <div className="flex min-h-full items-center justify-center px-4 py-6 pb-safe sm:p-6 sm:pb-10">
+      <div className="bg-wa-panel border border-wa-border rounded-2xl p-6 sm:p-10 w-full max-w-md shadow-2xl my-4">
         <div className="text-center mb-7">
           <img src="/logo.png" alt="" className="w-16 h-16 rounded-2xl mx-auto mb-3 object-contain" />
           <h1 className="text-2xl font-bold text-slate-100">EganirA</h1>
@@ -129,6 +130,7 @@ export default function AuthPage() {
             {loading ? 'Loading...' : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
+      </div>
       </div>
     </div>
   );
