@@ -14,20 +14,14 @@ const AppInner = () => {
       </div>
     );
   }
-  return user ? (
-    <>
-      <ChatPage />
-      <InstallPwaPrompt />
-    </>
-  ) : (
-    <AuthPage />
-  );
+  return user ? <ChatPage /> : <AuthPage />;
 };
 
 export default function App() {
   return (
     <AuthProvider>
       <AppInner />
+      <InstallPwaPrompt />
     </AuthProvider>
   );
 }
