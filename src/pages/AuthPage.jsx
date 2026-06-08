@@ -31,7 +31,7 @@ export default function AuthPage() {
   const submitLabel = loading ? 'Loading...' : mode === 'login' ? 'Sign In' : 'Create Account';
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto overscroll-contain chat-wallpaper bg-wa-dark">
+    <div className="fixed inset-0 overflow-y-auto overscroll-contain chat-wallpaper bg-wa-dark">
       <div className="px-4 py-5 pb-safe sm:px-6 sm:py-8 sm:pb-10">
         <div className="w-full max-w-md mx-auto bg-wa-panel border border-wa-border rounded-2xl p-5 sm:p-10 shadow-2xl">
           <div className="text-center mb-5 sm:mb-7">

@@ -6,22 +6,19 @@
 
 @layer base {
   html {
-    height: 100%;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
   }
 
   body {
     @apply font-sans bg-wa-chat text-slate-100 overflow-hidden;
-    min-height: 100%;
-    min-height: 100dvh;
+    height: 100dvh;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
       env(safe-area-inset-left);
   }
 
   #root {
     height: 100%;
-    min-height: 0;
     overflow: hidden;
   }
 }
