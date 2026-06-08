@@ -29,15 +29,16 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-full flex items-center justify-center chat-wallpaper bg-wa-dark px-4 py-6 sm:p-6">
-      <div className="bg-wa-panel border border-wa-border rounded-2xl p-6 sm:p-10 w-full max-w-md shadow-2xl">
-        <div className="text-center mb-7">
-          <img src="/logo.png" alt="" className="w-16 h-16 rounded-2xl mx-auto mb-3 object-contain" />
-          <h1 className="text-2xl font-bold text-slate-100">EganirA</h1>
+    <div className="h-full overflow-y-auto overscroll-contain chat-wallpaper bg-wa-dark">
+      <div className="flex min-h-full items-center justify-center px-4 py-5 sm:px-6 sm:py-8">
+      <div className="bg-wa-panel border border-wa-border rounded-2xl p-5 sm:p-10 w-full max-w-md shadow-2xl my-4">
+        <div className="text-center mb-5 sm:mb-7">
+          <img src="/logo.png" alt="" className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl mx-auto mb-2 sm:mb-3 object-contain" />
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-100">EganirA</h1>
           <p className="text-wa-muted text-sm mt-1">Connect with your friends</p>
         </div>
 
-        <div className="flex bg-wa-surface rounded-lg p-1 mb-6">
+        <div className="flex bg-wa-surface rounded-lg p-1 mb-4 sm:mb-6">
           {['login', 'register'].map((m) => (
             <button
               key={m}
@@ -52,7 +53,7 @@ export default function AuthPage() {
           ))}
         </div>
 
-        <form onSubmit={handle} className="flex flex-col gap-4">
+        <form onSubmit={handle} className="flex flex-col gap-3 sm:gap-4">
           {mode === 'register' && (
             <>
               <div>
@@ -129,6 +130,7 @@ export default function AuthPage() {
             {loading ? 'Loading...' : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
+      </div>
       </div>
     </div>
   );
