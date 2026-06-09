@@ -309,19 +309,6 @@ export default function SettingsModal({ onClose }) {
                     />
                     <span className="text-sm">Message &amp; call alerts (works when app is closed)</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 accent-wa-accent"
-                      checked={notifPrefs.sound}
-                      onChange={(e) => {
-                        const next = { ...notifPrefs, sound: e.target.checked };
-                        setNotifPrefs(next);
-                        setNotificationPrefs(next);
-                      }}
-                    />
-                    <span className="text-sm">Notification sound</span>
-                  </label>
                   {notifPermission !== 'granted' && (
                     <button
                       type="button"

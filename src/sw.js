@@ -58,7 +58,7 @@ async function handlePush(event) {
   for (const client of clients) {
     client.postMessage({
       type: 'eganira_alert',
-      playSound: true,
+      playSound: isCall,
       alertType: data.type,
       roomId: data.roomId,
       callId: data.callId,
@@ -79,7 +79,7 @@ async function handlePush(event) {
         fromUserId: data.fromUserId,
         url: data.url || '/',
       },
-      silent: false,
+      silent: !isCall,
       renotify: isCall,
     };
 

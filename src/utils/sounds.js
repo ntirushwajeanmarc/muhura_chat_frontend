@@ -1,4 +1,3 @@
-import { getNotificationPrefs } from './notifications';
 import { getCallSettings } from './callSettings';
 
 let messageAudio;
@@ -43,13 +42,7 @@ export function unlockSounds() {
 }
 
 export function playMessageAlert() {
-  const prefs = getNotificationPrefs();
-  if (!prefs.enabled || !prefs.sound) return;
-  const audio = getMessageAudio();
-  if (!audio) return;
-  audio.volume = 0.7;
-  audio.currentTime = 0;
-  audio.play().catch(() => {});
+  // Message sounds disabled — visual notifications only
 }
 
 export function playCallAlert({ outgoing = false } = {}) {
@@ -69,10 +62,6 @@ export function stopCallAlert() {
 }
 
 export function handleServiceWorkerAlert(data) {
-  if (!data?.playSound) return;
-  if (data.alertType === 'call') {
-    playCallAlert();
-    return;
-  }
-  playMessageAlert();
+  if (!data?.playSound || data.alertType !== 'call') return;
+  playCallAlert();
 }

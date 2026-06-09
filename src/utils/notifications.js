@@ -1,12 +1,10 @@
-import { playMessageAlert } from './sounds';
-
 const PREFS_KEY = 'studychat_notifications';
 
 export function getNotificationPrefs() {
   try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY) || '{"enabled":true,"sound":true}');
+    return JSON.parse(localStorage.getItem(PREFS_KEY) || '{"enabled":true,"sound":false}');
   } catch {
-    return { enabled: true, sound: true };
+    return { enabled: true, sound: false };
   }
 }
 
@@ -35,10 +33,6 @@ export function canNotify() {
   return prefs.enabled && 'Notification' in window && Notification.permission === 'granted';
 }
 
-export function playNotificationSound() {
-  playMessageAlert();
-}
-
 export function showMessageNotification({ title, body, roomId, onClick }) {
   const prefs = getNotificationPrefs();
   if (!prefs.enabled) return;
@@ -49,7 +43,7 @@ export function showMessageNotification({ title, body, roomId, onClick }) {
       icon: '/logo.png',
       badge: '/logo.png',
       tag: `room-${roomId}`,
-      silent: false,
+      silent: true,
     });
     notification.onclick = () => {
       window.focus();
@@ -57,8 +51,6 @@ export function showMessageNotification({ title, body, roomId, onClick }) {
       notification.close();
     };
   }
-
-  playMessageAlert();
 }
 
 export function messagePreview(msg) {

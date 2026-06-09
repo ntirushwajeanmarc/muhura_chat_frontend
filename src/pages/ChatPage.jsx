@@ -37,7 +37,6 @@ import {
   requestNotificationPermission,
   getNotificationPrefs,
   canNotify,
-  playNotificationSound,
 } from '../utils/notifications';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useCall } from '../hooks/useCall';
@@ -640,8 +639,6 @@ export default function ChatPage() {
           setProfileUserId(follower.id);
           notification.close();
         };
-      } else {
-        playNotificationSound();
       }
     });
     return () => {
