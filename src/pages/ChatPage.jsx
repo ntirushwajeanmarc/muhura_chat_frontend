@@ -52,6 +52,12 @@ import StarsBar from '../components/StarsBar';
 import CreateStarModal from '../components/CreateStarModal';
 import ViewStarsModal from '../components/ViewStarsModal';
 import GroupProfileModal from '../components/GroupProfileModal';
+import ConnectionBanner from '../components/ConnectionBanner';
+import VirtualMessageList from '../components/VirtualMessageList';
+import { useToast } from '../context/ToastContext';
+import { applyMessageToChatLists, applyEditToChatLists } from '../utils/chatPreview';
+import { enqueueMessage, getQueuedMessages, removeQueuedMessage } from '../utils/offlineQueue';
+import { cacheRoomMessages, getCachedRoomMessages } from '../utils/messageCache';
 
 function roomLabel(room) {
   if (!room) return '';
@@ -104,7 +110,8 @@ function sumUnread(rooms, unread) {
 
 export default function ChatPage() {
   const { user, token, logout, updateSession } = useAuth();
-  const { joinRoom, joinRooms, setPresenceRoom, syncPresence, sendMessage, sendTyping, markRead, on, connected, socket } = useSocket(token);
+  const { joinRoom, joinRooms, setPresenceRoom, syncPresence, sendMessage, sendTyping, markRead, on, connected, reconnecting, socket } = useSocket(token);
+  const { toast } = useToast();
   const {
     callState,
     callError,
@@ -169,8 +176,12 @@ export default function ChatPage() {
   const [pendingUpload, setPendingUpload] = useState(null);
   const [unread, setUnread] = useState({});
   const messagesAreaRef = useRef(null);
+  const messageListRef = useRef(null);
   const fileInputRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  const lastPendingSendRef = useRef(null);
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
   const stickToBottomRef = useRef(true);
@@ -191,6 +202,39 @@ export default function ChatPage() {
   useEffect(() => {
     requestNotificationPermission();
   }, []);
+
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
+
+  const chatListSetters = useMemo(
+    () => ({ setDirectChats, setGroupChats, setPublicRooms }),
+    []
+  );
+
+  const flushOfflineQueue = useCallback(() => {
+    if (!connected) return;
+    const queued = getQueuedMessages();
+    if (queued.length === 0) return;
+    queued.forEach((item) => {
+      const sent = sendMessage(item.roomId, item.content, item.replyToId);
+      if (sent) removeQueuedMessage(item.id);
+    });
+    if (getQueuedMessages().length === 0 && queued.length > 0) {
+      toast('Queued messages sent', 'success');
+    }
+  }, [connected, sendMessage, toast]);
+
+  useEffect(() => {
+    if (connected) flushOfflineQueue();
+  }, [connected, flushOfflineQueue]);
 
   const loadStarsFeed = useCallback(async () => {
     try {
@@ -346,7 +390,12 @@ export default function ChatPage() {
   }, []);
 
   const scrollToBottom = useCallback((behavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    if (messageListRef.current) {
+      messageListRef.current.scrollToBottom(behavior);
+      return;
+    }
+    const el = messagesAreaRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
   const mergeMessages = useCallback((existing, incoming) => {
@@ -356,11 +405,24 @@ export default function ChatPage() {
   }, []);
 
   const loadInitialMessages = useCallback(async (roomId) => {
-    const { messages: data, hasMore } = await fetchRoomMessages(roomId);
-    setMessages(data);
-    setHasMoreOlder(hasMore);
-    requestAnimationFrame(() => scrollToBottom('auto'));
-  }, [scrollToBottom]);
+    try {
+      const { messages: data, hasMore } = await fetchRoomMessages(roomId);
+      setMessages(data);
+      setHasMoreOlder(hasMore);
+      cacheRoomMessages(roomId, data);
+      requestAnimationFrame(() => scrollToBottom('auto'));
+    } catch {
+      const cached = getCachedRoomMessages(roomId);
+      if (cached?.length) {
+        setMessages(cached);
+        setHasMoreOlder(false);
+        toast('Showing cached messages (offline)', 'warning');
+        requestAnimationFrame(() => scrollToBottom('auto'));
+      } else {
+        toast('Could not load messages', 'error');
+      }
+    }
+  }, [scrollToBottom, toast]);
 
   const fetchReadState = useCallback(async (roomId) => {
     if (!roomId) return;
@@ -394,7 +456,11 @@ export default function ChatPage() {
         before: oldest.id,
       });
       if (older.length > 0) {
-        setMessages((prev) => mergeMessages(older, prev));
+        setMessages((prev) => {
+          const next = mergeMessages(older, prev);
+          cacheRoomMessages(activeRoom.id, next);
+          return next;
+        });
         requestAnimationFrame(() => {
           if (el) {
             el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop;
@@ -509,18 +575,18 @@ export default function ChatPage() {
     return () => clearTimeout(timer);
   }, [connected, activeRoom?.id, messages, markRoomAsRead]);
 
-  useEffect(() => {
+  const handleMessagesScroll = useCallback(() => {
     const el = messagesAreaRef.current;
     if (!el) return;
-    const onScroll = () => {
-      stickToBottomRef.current = isNearBottom();
-      if (el.scrollTop <= LOAD_OLDER_THRESHOLD) {
-        loadOlderMessages();
-      }
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [isNearBottom, activeRoom?.id, loadOlderMessages]);
+    stickToBottomRef.current = isNearBottom();
+  }, [isNearBottom]);
+
+  useEffect(() => {
+    const el = messagesAreaRef.current;
+    if (!el) return undefined;
+    el.addEventListener('scroll', handleMessagesScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleMessagesScroll);
+  }, [handleMessagesScroll, activeRoom?.id]);
 
   useEffect(() => {
     if (!messageActionsId || !isMobile) return undefined;
@@ -567,11 +633,24 @@ export default function ChatPage() {
       if (isActiveRoom) {
         setMessages((prev) => {
           if (prev.some((m) => m.id === msg.id)) return prev;
-          return [...prev, msg];
+          const next = [...prev, msg];
+          cacheRoomMessages(msg.room_id, next);
+          return next;
         });
       }
 
-      refreshChats();
+      applyMessageToChatLists(msg.room_id, msg, chatListSetters);
+    });
+    const offMsgError = on('message_error', ({ roomId, error }) => {
+      const pending = lastPendingSendRef.current;
+      if (pending && pending.roomId === roomId) {
+        setInput(pending.content);
+        if (pending.replyToId) {
+          setReplyingTo(pending.replyTo);
+        }
+        lastPendingSendRef.current = null;
+      }
+      toast(error || 'Failed to send message', 'error');
     });
     const offRoom = on('room_added', ({ roomId }) => {
       if (roomId) joinRoom(roomId);
@@ -603,9 +682,18 @@ export default function ChatPage() {
       );
     });
     const offEdited = on('message_edited', (msg) => {
-      if (msg.room_id && msg.room_id !== activeRoomIdRef.current) return;
-      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
-      refreshChats();
+      const isActiveRoom = msg.room_id === activeRoomIdRef.current;
+      if (isActiveRoom) {
+        setMessages((prev) => {
+          const next = prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m));
+          cacheRoomMessages(msg.room_id, next);
+          const last = next[next.length - 1];
+          applyEditToChatLists(msg.room_id, msg, chatListSetters, last?.id === msg.id);
+          return next;
+        });
+      } else {
+        applyEditToChatLists(msg.room_id, msg, chatListSetters, false);
+      }
     });
     const offLike = on('message_like_updated', (payload) => {
       if (payload.room_id !== activeRoomIdRef.current) return;
@@ -656,6 +744,7 @@ export default function ChatPage() {
     });
     return () => {
       offMsg?.();
+      offMsgError?.();
       offRoom?.();
       offOnline?.();
       offPresenceSnapshot?.();
@@ -667,7 +756,7 @@ export default function ChatPage() {
       offStar?.();
       offFollower?.();
     };
-  }, [connected, on, syncPresence, refreshChats, openRoomById, joinRoom, loadStarsFeed]);
+  }, [connected, on, syncPresence, refreshChats, openRoomById, joinRoom, loadStarsFeed, chatListSetters, toast]);
 
   useEffect(() => {
     if (stickToBottomRef.current) {
@@ -698,8 +787,38 @@ export default function ChatPage() {
 
   const handleSend = (e) => {
     e.preventDefault();
-    if (!input.trim() || !activeRoom) return;
-    sendMessage(activeRoom.id, input, replyingTo?.id ?? null);
+    const content = input.trim();
+    if (!content || !activeRoom) return;
+
+    const replyToId = replyingTo?.id ?? null;
+    const replySnapshot = replyingTo;
+
+    if (!connected || isOffline) {
+      enqueueMessage({ roomId: activeRoom.id, content, replyToId });
+      setInput('');
+      setReplyingTo(null);
+      sendTyping(activeRoom.id, false);
+      toast('Message queued — will send when reconnected', 'warning');
+      return;
+    }
+
+    lastPendingSendRef.current = {
+      roomId: activeRoom.id,
+      content,
+      replyToId,
+      replyTo: replySnapshot,
+    };
+    const sent = sendMessage(activeRoom.id, content, replyToId);
+    if (!sent) {
+      enqueueMessage({ roomId: activeRoom.id, content, replyToId });
+      toast('Message queued — will send when reconnected', 'warning');
+    } else {
+      setTimeout(() => {
+        if (lastPendingSendRef.current?.content === content) {
+          lastPendingSendRef.current = null;
+        }
+      }, 8000);
+    }
     setInput('');
     setReplyingTo(null);
     sendTyping(activeRoom.id, false);
@@ -733,7 +852,7 @@ export default function ChatPage() {
       requestAnimationFrame(() => scrollToBottom('smooth'));
     } catch (err) {
       const message = err.response?.data?.error || 'Failed to upload file';
-      alert(message);
+      toast(message, 'error');
     } finally {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPendingUpload(null);
@@ -787,9 +906,15 @@ export default function ChatPage() {
         `${BACKEND_URL}/api/rooms/${activeRoom.id}/messages/${msg.id}`,
         { content: editDraft }
       );
-      setMessages((prev) => prev.map((m) => (m.id === msg.id ? res.data.message : m)));
+      const updated = res.data.message;
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === msg.id ? updated : m));
+        cacheRoomMessages(activeRoom.id, next);
+        const last = next[next.length - 1];
+        applyEditToChatLists(activeRoom.id, updated, chatListSetters, last?.id === msg.id);
+        return next;
+      });
       cancelEdit();
-      refreshChats();
     } catch (err) {
       setEditError(err.response?.data?.error || 'Could not save edit');
     } finally {
@@ -807,6 +932,8 @@ export default function ChatPage() {
     });
     return grouped;
   };
+
+  const groupedMessages = useMemo(() => groupMessages(messages), [messages]);
 
   const selectRoom = (room) => {
     if (room?.type === 'public') setSidebarTab('channels');
@@ -885,6 +1012,7 @@ export default function ChatPage() {
     if (!activeRoom?.peer) return;
     if (!connected) {
       clearCallError();
+      toast('Cannot start call — not connected', 'error');
       return;
     }
     try {
@@ -909,8 +1037,12 @@ export default function ChatPage() {
       }
     }
     requestAnimationFrame(() => {
-      const el = document.getElementById(`msg-${messageId}`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const idx = messageListRef.current?.getIndexForMessageId(messageId);
+      if (typeof idx === 'number' && idx >= 0) {
+        messageListRef.current.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
+      } else {
+        document.getElementById(`msg-${messageId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     });
     setTimeout(() => setHighlightMessageId(null), 2500);
   };
@@ -1278,9 +1410,11 @@ export default function ChatPage() {
 
         {(sidebarOpen || isMobile) && (
           <div className="shrink-0 px-3 pt-2 pb-1 border-b border-wa-border/60">
-            <div className="flex rounded-xl bg-wa-surface/80 p-1 gap-1">
+            <div className="flex rounded-xl bg-wa-surface/80 p-1 gap-1" role="tablist" aria-label="Sidebar sections">
               <button
                 type="button"
+                role="tab"
+                aria-selected={sidebarTab === 'chats'}
                 onClick={() => setSidebarTab('chats')}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   sidebarTab === 'chats' ? 'bg-wa-accent text-white shadow-sm' : 'text-wa-muted hover:text-slate-200'
@@ -1291,6 +1425,8 @@ export default function ChatPage() {
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={sidebarTab === 'channels'}
                 onClick={() => setSidebarTab('channels')}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   sidebarTab === 'channels' ? 'bg-wa-accent text-white shadow-sm' : 'text-wa-muted hover:text-slate-200'
@@ -1599,6 +1735,8 @@ export default function ChatPage() {
           )}
         </header>
 
+        <ConnectionBanner connected={connected} reconnecting={reconnecting} offline={isOffline} />
+
         {showMessageSearch && activeRoom && (
           <ChatMessageSearch
             roomId={activeRoom.id}
@@ -1620,7 +1758,15 @@ export default function ChatPage() {
             </div>
           )}
           {activeRoom && (
-          <div className="w-full max-w-3xl lg:max-w-4xl mx-auto p-3 sm:p-5 flex flex-col gap-0.5 min-h-full">
+          <div className="w-full max-w-3xl lg:max-w-4xl mx-auto p-3 sm:p-5 flex flex-col gap-0.5 min-h-full" role="log" aria-label="Chat messages" aria-live="polite">
+          <VirtualMessageList
+            ref={messageListRef}
+            scrollRef={messagesAreaRef}
+            items={groupedMessages}
+            onNearTop={loadOlderMessages}
+            nearTopThreshold={LOAD_OLDER_THRESHOLD}
+            header={(
+              <>
           {loadingOlder && <p className="text-center text-sm text-wa-muted py-2">Loading older messages…</p>}
           {!loadingOlder && hasMoreOlder && messages.length > 0 && (
             <p className="text-center text-xs text-wa-muted py-2">Scroll up for older messages</p>
@@ -1628,7 +1774,32 @@ export default function ChatPage() {
           {!hasMoreOlder && messages.length > 0 && (
             <p className="text-center text-xs text-wa-muted py-2 border-b border-wa-border mb-2">Beginning of conversation</p>
           )}
-          {groupMessages(messages).map((msg) => (
+              </>
+            )}
+            footer={(
+              <>
+          {pendingUpload && (
+            <PendingUploadBubble
+              file={pendingUpload.file}
+              progress={pendingUpload.progress}
+              previewUrl={pendingUpload.previewUrl}
+              caption={pendingUpload.caption}
+            />
+          )}
+
+          {typingUsers.length > 0 && (
+            <div className="flex items-center gap-2 text-sm text-wa-muted mt-2">
+              <span className="flex gap-1" aria-hidden>
+                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
+                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
+                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
+              </span>
+              <span aria-live="polite">{typingUsers.join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...</span>
+            </div>
+          )}
+              </>
+            )}
+            renderItem={(msg) => (
             <div
               key={msg.id}
               id={`msg-${msg.id}`}
@@ -1642,6 +1813,7 @@ export default function ChatPage() {
                     type="button"
                     className="shrink-0 rounded-full hover:opacity-90"
                     onClick={() => openProfile(msg.user_id)}
+                    aria-label={`View ${msg.username}'s profile`}
                     title="View profile"
                   >
                     <Avatar username={msg.username} color={msg.avatar_color} avatarUrl={msg.avatar_url} size={32} />
@@ -1795,28 +1967,8 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
-          ))}
-
-          {pendingUpload && (
-            <PendingUploadBubble
-              file={pendingUpload.file}
-              progress={pendingUpload.progress}
-              previewUrl={pendingUpload.previewUrl}
-              caption={pendingUpload.caption}
-            />
           )}
-
-          {typingUsers.length > 0 && (
-            <div className="flex items-center gap-2 text-sm text-wa-muted mt-2">
-              <span className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
-                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
-                <span className="w-1.5 h-1.5 rounded-full bg-wa-accent typing-dot" />
-              </span>
-              <span>{typingUsers.join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...</span>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
+          />
           </div>
           )}
         </ChatWallpaper>
@@ -1890,6 +2042,7 @@ export default function ChatPage() {
             type="submit"
             className="touch-target px-4 py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white text-base transition-colors shrink-0"
             disabled={!input.trim()}
+            aria-label="Send message"
           >
             ➤
           </button>

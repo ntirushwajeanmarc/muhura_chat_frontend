@@ -8,11 +8,13 @@ const joinedRooms = new Set();
 export const useSocket = (token) => {
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     if (!token) {
       setConnected(false);
+      setReconnecting(false);
       setSocket(null);
       return undefined;
     }
@@ -25,6 +27,8 @@ export const useSocket = (token) => {
     const socket = io(SOCKET_URL, {
       auth: { token },
       path: '/socket.io',
+      reconnection: true,
+      reconnectionAttempts: Infinity,
     });
 
     socketInstance = socket;
@@ -33,24 +37,36 @@ export const useSocket = (token) => {
 
     const onConnect = () => {
       setConnected(true);
+      setReconnecting(false);
       joinedRooms.forEach((roomId) => socket.emit('join_room', roomId));
     };
 
-    const onDisconnect = () => {
+    const onDisconnect = (reason) => {
       setConnected(false);
+      if (reason !== 'io client disconnect') {
+        setReconnecting(true);
+      }
+    };
+
+    const onConnectError = () => {
+      setConnected(false);
+      setReconnecting(true);
     };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
     if (socket.connected) onConnect();
 
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
       socket.disconnect();
       socketInstance = null;
       socketRef.current = null;
       setConnected(false);
+      setReconnecting(false);
       setSocket(null);
     };
   }, [token]);
@@ -77,7 +93,9 @@ export const useSocket = (token) => {
   }, []);
 
   const sendMessage = useCallback((roomId, content, replyToId = null) => {
-    socketRef.current?.emit('send_message', { roomId, content, replyToId });
+    if (!socketRef.current?.connected) return false;
+    socketRef.current.emit('send_message', { roomId, content, replyToId });
+    return true;
   }, []);
 
   const editMessage = useCallback((roomId, messageId, content) => {
@@ -112,6 +130,7 @@ export const useSocket = (token) => {
     sendTyping,
     on,
     connected,
+    reconnecting,
     socket,
   };
 };

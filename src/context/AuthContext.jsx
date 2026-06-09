@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { BACKEND_URL } from '../config';
+import { setupAxiosInterceptors, setUnauthorizedHandler } from '../api/setupAxios';
 
 const AuthContext = createContext(null);
+
+setupAxiosInterceptors();
 
 const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
 if (storedToken) {
@@ -13,6 +16,21 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    delete axios.defaults.headers.common['Authorization'];
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [logout]);
 
   useEffect(() => {
     if (!token) {
@@ -31,10 +49,13 @@ export const AuthProvider = ({ children }) => {
         const profile = res.data;
         localStorage.setItem('user', JSON.stringify(profile));
         setUser(profile);
-      } catch {
+      } catch (err) {
         if (cancelled) return;
-        const stored = localStorage.getItem('user');
-        if (stored) setUser(JSON.parse(stored));
+        if (err.response?.status === 401) {
+          logout();
+        } else {
+          setUser(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -43,7 +64,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, logout]);
 
   const login = async (email, password) => {
     const res = await axios.post(`${BACKEND_URL}/api/auth/login`, { email, password });
@@ -71,14 +92,6 @@ export const AuthProvider = ({ children }) => {
     setToken(t);
     setUser(u);
     return u;
-  };
-
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    delete axios.defaults.headers.common['Authorization'];
-    setToken(null);
-    setUser(null);
   };
 
   const updateSession = (updatedUser, newToken) => {

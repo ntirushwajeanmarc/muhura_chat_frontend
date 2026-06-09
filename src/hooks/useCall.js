@@ -428,6 +428,12 @@ export function useCall(socket, currentUser, connected) {
       if (activeCallIdRef.current === callId) cleanup();
     };
 
+    const onCallError = ({ callId, error }) => {
+      if (activeCallIdRef.current && callId && activeCallIdRef.current !== callId) return;
+      setCallError(error || 'Call failed');
+      cleanup();
+    };
+
     socket.on('call_invite', onInvite);
     socket.on('call_delivered', onDelivered);
     socket.on('call_ringing', onRinging);
@@ -435,6 +441,7 @@ export function useCall(socket, currentUser, connected) {
     socket.on('call_ice', onIce);
     socket.on('call_reject', onReject);
     socket.on('call_end', onEnd);
+    socket.on('call_error', onCallError);
 
     return () => {
       socket.off('call_invite', onInvite);
@@ -444,6 +451,7 @@ export function useCall(socket, currentUser, connected) {
       socket.off('call_ice', onIce);
       socket.off('call_reject', onReject);
       socket.off('call_end', onEnd);
+      socket.off('call_error', onCallError);
     };
   }, [socket, cleanup, playRingtone, stopRingtone, flushPendingIce, attachRemoteStream]);
 

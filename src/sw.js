@@ -1,6 +1,6 @@
 import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching';
 import { registerRoute, NavigationRoute } from 'workbox-routing';
-import { CacheFirst } from 'workbox-strategies';
+import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 
 precacheAndRoute(self.__WB_MANIFEST);
@@ -34,6 +34,17 @@ registerRoute(
   new CacheFirst({
     cacheName: 'gstatic-fonts-cache',
     plugins: [new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 })],
+  })
+);
+
+// Cache recent room message fetches for offline read (same-origin API only)
+registerRoute(
+  ({ url, request }) =>
+    request.method === 'GET' && /\/api\/rooms\/[^/]+\/messages/.test(url.pathname),
+  new NetworkFirst({
+    cacheName: 'eganira-room-messages',
+    networkTimeoutSeconds: 4,
+    plugins: [new ExpirationPlugin({ maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 3 })],
   })
 );
 
