@@ -53,6 +53,25 @@ import CreateStarModal from '../components/CreateStarModal';
 import ViewStarsModal from '../components/ViewStarsModal';
 import GroupProfileModal from '../components/GroupProfileModal';
 import ConnectionBanner from '../components/ConnectionBanner';
+import CallMessageBubble from '../components/CallMessageBubble';
+import GifPicker from '../components/GifPicker';
+import IconBtn, { composerBtn } from '../components/IconBtn';
+import RoomTypeIcon from '../components/RoomTypeIcon';
+import { sendGif } from '../api/gifs';
+import {
+  Paperclip,
+  Send,
+  Menu,
+  ChevronLeft,
+  X,
+  Users,
+  Hash,
+  MessageCirclePlus,
+  MessageCircle,
+  Search,
+  Pencil,
+  LogOut,
+} from 'lucide-react';
 import VirtualMessageList from '../components/VirtualMessageList';
 import { useToast } from '../context/ToastContext';
 import { applyMessageToChatLists, applyEditToChatLists } from '../utils/chatPreview';
@@ -64,12 +83,6 @@ function roomLabel(room) {
   if (room.type === 'direct') return room.display_name || room.peer?.username || 'Chat';
   if (room.type === 'group') return room.display_name || room.name;
   return room.name ? `#${room.name}` : 'Channel';
-}
-
-function roomPrefix(room) {
-  if (room?.type === 'public') return '#';
-  if (room?.type === 'group') return '👥';
-  return null;
 }
 
 function unreadMapFromRooms(...roomLists) {
@@ -173,6 +186,7 @@ export default function ChatPage() {
   const [viewingStars, setViewingStars] = useState(null);
   const [showGroupProfile, setShowGroupProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [sendingGif, setSendingGif] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
   const [unread, setUnread] = useState({});
   const messagesAreaRef = useRef(null);
@@ -639,7 +653,7 @@ export default function ChatPage() {
         });
       }
 
-      applyMessageToChatLists(msg.room_id, msg, chatListSetters);
+      applyMessageToChatLists(msg.room_id, msg, chatListSetters, userRef.current?.id);
     });
     const offMsgError = on('message_error', ({ roomId, error }) => {
       const pending = lastPendingSendRef.current;
@@ -826,6 +840,34 @@ export default function ChatPage() {
     requestAnimationFrame(() => scrollToBottom('smooth'));
   };
 
+  const handleGifSelect = async (gif) => {
+    if (!gif?.gifUrl || !activeRoom || sendingGif || uploading) return;
+
+    setSendingGif(true);
+    stickToBottomRef.current = true;
+    try {
+      const msg = await sendGif(activeRoom.id, gif.gifUrl, {
+        title: gif.title,
+        replyToId: replyingTo?.id ?? null,
+      });
+      setReplyingTo(null);
+      if (msg.room_id === activeRoomIdRef.current) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          const next = [...prev, msg];
+          cacheRoomMessages(activeRoom.id, next);
+          return next;
+        });
+        requestAnimationFrame(() => scrollToBottom('smooth'));
+      }
+      applyMessageToChatLists(activeRoom.id, msg, chatListSetters, user?.id);
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to send GIF', 'error');
+    } finally {
+      setSendingGif(false);
+    }
+  };
+
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -926,7 +968,9 @@ export default function ChatPage() {
     const grouped = [];
     msgs.forEach((msg, i) => {
       const prev = msgs[i - 1];
-      const sameUser = prev?.username === msg.username;
+      const isCall = msg.message_type === 'call';
+      const prevIsCall = prev?.message_type === 'call';
+      const sameUser = !isCall && !prevIsCall && prev?.username === msg.username;
       const sameMinute = prev && Math.abs(new Date(msg.created_at) - new Date(prev.created_at)) < 60000;
       grouped.push({ ...msg, grouped: sameUser && sameMinute });
     });
@@ -1130,7 +1174,6 @@ export default function ChatPage() {
 
   const renderChatItem = (room, compact = false) => {
     const label = roomLabel(room);
-    const prefix = roomPrefix(room);
     const avatarColor = room.type === 'direct' ? room.peer?.avatar_color : null;
     const avatarUrl = room.type === 'direct' ? room.peer?.avatar_url : null;
     const avatarName = room.type === 'direct' ? room.peer?.username : label;
@@ -1152,8 +1195,8 @@ export default function ChatPage() {
           {room.type === 'direct' ? (
             avatarWithPresence(avatarName, avatarColor, avatarUrl, 36, peerId)
           ) : (
-            <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center text-base">
-              {prefix || '💬'}
+            <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center">
+              <RoomTypeIcon room={room} size={18} />
             </span>
           )}
           {hasUnread && (
@@ -1178,8 +1221,8 @@ export default function ChatPage() {
         {room.type === 'direct' ? (
           avatarWithPresence(avatarName, avatarColor, avatarUrl, 40, peerId)
         ) : (
-          <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">
-            {prefix || '💬'}
+          <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center shrink-0">
+            <RoomTypeIcon room={room} size={20} />
           </span>
         )}
         <div className="flex-1 min-w-0">
@@ -1379,7 +1422,7 @@ export default function ChatPage() {
                   title="Collapse sidebar"
                   aria-label="Collapse sidebar"
                 >
-                  ←
+                  <ChevronLeft size={20} strokeWidth={1.75} aria-hidden />
                 </button>
               )}
             </>
@@ -1391,7 +1434,7 @@ export default function ChatPage() {
               title="Open sidebar"
               aria-label="Open sidebar"
             >
-              ☰
+              <Menu size={20} strokeWidth={1.75} aria-hidden />
             </button>
           )}
         </div>
@@ -1460,7 +1503,7 @@ export default function ChatPage() {
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
                   onClick={() => setShowNewChat(true)}
                 >
-                  <span>💬</span>
+                  <MessageCirclePlus size={16} strokeWidth={1.75} aria-hidden />
                   <span>New chat</span>
                 </button>
                 <button
@@ -1468,7 +1511,7 @@ export default function ChatPage() {
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
                   onClick={() => setShowNewGroup(true)}
                 >
-                  <span>👥</span>
+                  <Users size={16} strokeWidth={1.75} aria-hidden />
                   <span>Group</span>
                 </button>
               </div>
@@ -1482,7 +1525,7 @@ export default function ChatPage() {
                     setShowCreateChannel(true);
                   }}
                 >
-                  <span>#</span>
+                  <Hash size={16} strokeWidth={1.75} aria-hidden />
                   <span>Create channel</span>
                 </button>
                 <button
@@ -1490,15 +1533,19 @@ export default function ChatPage() {
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-wa-surface hover:bg-wa-border text-sm font-medium transition-colors"
                   onClick={() => setShowChannelSearch(true)}
                 >
-                  <span>🔍</span>
+                  <Search size={16} strokeWidth={1.75} aria-hidden />
                   <span>Browse</span>
                 </button>
               </div>
             )
           ) : (
             <div className="flex flex-col gap-1.5">
-              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border text-lg" onClick={() => { setSidebarTab('chats'); setShowNewChat(true); }} title="New chat">💬</button>
-              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border text-lg" onClick={() => { setSidebarTab('channels'); setShowCreateChannel(true); }} title="Create channel">#</button>
+              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border inline-flex items-center justify-center" onClick={() => { setSidebarTab('chats'); setShowNewChat(true); }} title="New chat" aria-label="New chat">
+                <MessageCircle size={20} strokeWidth={1.75} className="text-wa-muted" aria-hidden />
+              </button>
+              <button type="button" className="w-11 h-11 mx-auto rounded-xl bg-wa-surface hover:bg-wa-border inline-flex items-center justify-center" onClick={() => { setSidebarTab('channels'); setShowCreateChannel(true); }} title="Create channel" aria-label="Create channel">
+                <Hash size={20} strokeWidth={1.75} className="text-wa-muted" aria-hidden />
+              </button>
             </div>
           )}
         </div>
@@ -1541,7 +1588,9 @@ export default function ChatPage() {
                           onClick={() => handleQuickJoinChannel(channel)}
                           className="flex items-center gap-3 w-full p-2.5 rounded-xl text-left bg-wa-surface/50 hover:bg-wa-surface border border-wa-border/50 transition-colors disabled:opacity-50"
                         >
-                          <span className="w-9 h-9 rounded-full bg-wa-accent/15 text-wa-accent flex items-center justify-center text-sm font-bold shrink-0">#</span>
+                          <span className="w-9 h-9 rounded-full bg-wa-accent/15 text-wa-accent flex items-center justify-center shrink-0">
+                            <Hash size={16} strokeWidth={2} aria-hidden />
+                          </span>
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-semibold truncate">{channel.name}</div>
                             {channel.description && (
@@ -1571,7 +1620,9 @@ export default function ChatPage() {
                         onClick={() => handleQuickJoinChannel(channel)}
                         className="flex items-center gap-3 w-full p-2.5 rounded-xl text-left hover:bg-wa-surface/70 transition-colors disabled:opacity-50"
                       >
-                        <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
+                        <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center shrink-0">
+                          <Hash size={18} strokeWidth={1.75} className="text-wa-muted" aria-hidden />
+                        </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-semibold truncate">{channel.name}</div>
                           {channel.description && (
@@ -1629,16 +1680,18 @@ export default function ChatPage() {
                 className="w-8 h-8 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
                 onClick={() => setShowSettings(true)}
                 title="Edit profile"
+                aria-label="Edit profile"
               >
-                ✏️
+                <Pencil size={16} strokeWidth={1.75} aria-hidden />
               </button>
               <button
                 type="button"
                 className="w-8 h-8 rounded-lg text-wa-muted hover:text-red-400 hover:bg-wa-surface flex items-center justify-center"
                 onClick={logout}
                 title="Logout"
+                aria-label="Logout"
               >
-                ⏻
+                <LogOut size={16} strokeWidth={1.75} aria-hidden />
               </button>
             </>
           ) : (
@@ -1648,16 +1701,18 @@ export default function ChatPage() {
                 className="w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
                 onClick={() => setShowSettings(true)}
                 title="Edit profile"
+                aria-label="Edit profile"
               >
-                ✏️
+                <Pencil size={18} strokeWidth={1.75} aria-hidden />
               </button>
               <button
                 type="button"
                 className="w-10 h-10 rounded-lg text-wa-muted hover:text-red-400 hover:bg-wa-surface flex items-center justify-center"
                 onClick={logout}
                 title="Logout"
+                aria-label="Logout"
               >
-                ⏻
+                <LogOut size={18} strokeWidth={1.75} aria-hidden />
               </button>
             </>
           )}
@@ -1677,7 +1732,7 @@ export default function ChatPage() {
               onClick={() => setMobileShowList(true)}
               aria-label="Back to chats"
             >
-              ←
+              <ChevronLeft size={20} strokeWidth={1.75} aria-hidden />
             </button>
           )}
           {activeRoom ? (
@@ -1692,10 +1747,14 @@ export default function ChatPage() {
             >
               {activeRoom.type === 'direct' && headerAvatar}
               {activeRoom.type === 'group' && (
-                <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">👥</span>
+                <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center shrink-0">
+                  <Users size={18} strokeWidth={1.75} className="text-wa-muted" aria-hidden />
+                </span>
               )}
               {activeRoom.type === 'public' && (
-                <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center text-lg shrink-0">#</span>
+                <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center shrink-0">
+                  <Hash size={18} strokeWidth={1.75} className="text-wa-muted" aria-hidden />
+                </span>
               )}
               <div className="min-w-0">
                 <p className="font-semibold text-sm sm:text-base truncate">
@@ -1800,6 +1859,11 @@ export default function ChatPage() {
               </>
             )}
             renderItem={(msg) => (
+            msg.message_type === 'call' ? (
+              <div key={msg.id} id={`msg-${msg.id}`}>
+                <CallMessageBubble message={msg} viewerId={user?.id} formatTime={formatTime} />
+              </div>
+            ) : (
             <div
               key={msg.id}
               id={`msg-${msg.id}`}
@@ -1967,6 +2031,7 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
+            )
           )}
           />
           </div>
@@ -1989,7 +2054,7 @@ export default function ChatPage() {
               onClick={() => setReplyingTo(null)}
               aria-label="Cancel reply"
             >
-              ✕
+              <X size={18} strokeWidth={1.75} aria-hidden />
             </button>
           </div>
         )}
@@ -2006,15 +2071,20 @@ export default function ChatPage() {
             onChange={handleFileSelect}
           />
           <div className="flex-1 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors overflow-visible">
-            <button
-              type="button"
-              className="touch-target w-10 h-10 rounded-lg text-lg hover:bg-wa-panel disabled:opacity-40 shrink-0"
+            <IconBtn
+              icon={Paperclip}
+              className={`${composerBtn} w-10 h-10`}
               onClick={() => fileInputRef.current?.click()}
               disabled={!activeRoom || uploading}
               title="Attach file"
-            >
-              📎
-            </button>
+              aria-label="Attach file"
+              size={20}
+            />
+            <GifPicker
+              onSelect={handleGifSelect}
+              disabled={!activeRoom}
+              sending={sendingGif}
+            />
             <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
             <textarea
               ref={inputRef}
@@ -2040,11 +2110,11 @@ export default function ChatPage() {
           </div>
           <button
             type="submit"
-            className="touch-target px-4 py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white text-base transition-colors shrink-0"
+            className="touch-target px-4 py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white transition-colors shrink-0 inline-flex items-center justify-center"
             disabled={!input.trim()}
             aria-label="Send message"
           >
-            ➤
+            <Send size={20} strokeWidth={1.75} aria-hidden />
           </button>
         </form>
       </main>

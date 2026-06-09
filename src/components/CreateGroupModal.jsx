@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
+import ModalCloseBtn from './ModalCloseBtn';
 import UserSearchModal from './UserSearchModal';
 import Avatar from './Avatar';
 
@@ -54,9 +56,7 @@ export default function CreateGroupModal({ onCreate, onClose }) {
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border">
           <h2 className="text-lg font-semibold">New group</h2>
-          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <ModalCloseBtn onClick={onClose} />
         </div>
 
         <form onSubmit={handleCreate} className="p-4 flex flex-col gap-4">
@@ -85,8 +85,8 @@ export default function CreateGroupModal({ onCreate, onClose }) {
                 <div key={m.id} className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-wa-surface rounded-full text-sm">
                   <Avatar username={m.username} color={m.avatar_color} avatarUrl={m.avatar_url} size={28} />
                   <span>{m.username}</span>
-                  <button type="button" className="text-wa-muted hover:text-slate-200 text-xs ml-1" onClick={() => removeMember(m.id)} aria-label="Remove">
-                    ✕
+                  <button type="button" className="text-wa-muted hover:text-slate-200 text-xs ml-1 inline-flex" onClick={() => removeMember(m.id)} aria-label="Remove">
+                    <X size={14} strokeWidth={1.75} aria-hidden />
                   </button>
                 </div>
               ))}

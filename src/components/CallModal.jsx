@@ -1,4 +1,16 @@
 import React from 'react';
+import {
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  Volume2,
+  Smartphone,
+  PhoneOff,
+  Phone,
+  X,
+  Check,
+} from 'lucide-react';
 import Avatar from './Avatar';
 
 const STATUS_LABEL = {
@@ -11,10 +23,10 @@ const STATUS_LABEL = {
 function CallControlButton({ active, label, onClick, children, variant = 'default' }) {
   const base = 'flex flex-col items-center gap-1.5 min-w-[72px]';
   const btnClass = variant === 'danger'
-    ? 'w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-xl shadow-lg transition-colors'
+    ? 'w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-colors'
     : active
-      ? 'w-14 h-14 rounded-full bg-wa-accent text-white flex items-center justify-center text-xl shadow-lg transition-colors'
-      : 'w-14 h-14 rounded-full bg-wa-surface hover:bg-wa-border text-slate-200 flex items-center justify-center text-xl border border-wa-border transition-colors';
+      ? 'w-14 h-14 rounded-full bg-wa-accent text-white flex items-center justify-center shadow-lg transition-colors'
+      : 'w-14 h-14 rounded-full bg-wa-surface hover:bg-wa-border text-slate-200 flex items-center justify-center border border-wa-border transition-colors';
 
   return (
     <div className={base}>
@@ -145,7 +157,7 @@ export default function CallModal({
                   label={isMuted ? 'Unmute' : 'Mute'}
                   onClick={onToggleMute}
                 >
-                  {isMuted ? '🔇' : '🎤'}
+                  {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
                 </CallControlButton>
                 {isVideo && (
                   <CallControlButton
@@ -153,7 +165,7 @@ export default function CallModal({
                     label={isCameraOff ? 'Camera on' : 'Camera off'}
                     onClick={onToggleCamera}
                   >
-                    {isCameraOff ? '📷' : '📹'}
+                    {isCameraOff ? <VideoOff size={22} /> : <Video size={22} />}
                   </CallControlButton>
                 )}
                 {!isVideo && (
@@ -162,7 +174,7 @@ export default function CallModal({
                     label={speakerOn ? 'Speaker' : 'Earpiece'}
                     onClick={onToggleSpeaker}
                   >
-                    {speakerOn ? '🔊' : '📱'}
+                    {speakerOn ? <Volume2 size={22} /> : <Smartphone size={22} />}
                   </CallControlButton>
                 )}
               </>
@@ -174,16 +186,16 @@ export default function CallModal({
           {isIncoming && (
             <>
               <CallControlButton label="Decline" onClick={onReject} variant="danger">
-                ✕
+                <X size={24} />
               </CallControlButton>
               <CallControlButton label="Accept" onClick={onAccept} active>
-                ✓
+                <Check size={24} />
               </CallControlButton>
             </>
           )}
           {(isOutgoing || isActive) && (
             <CallControlButton label={isActive ? 'End' : 'Cancel'} onClick={onEnd} variant="danger">
-              📞
+              <PhoneOff size={22} />
             </CallControlButton>
           )}
         </div>

@@ -1,11 +1,13 @@
 import React from 'react';
+import { Image, FileText, Paperclip } from 'lucide-react';
 import CircularProgress from './CircularProgress';
 
-function fileIcon(name) {
+function FileTypeIcon({ name }) {
   const ext = name?.split('.').pop()?.toLowerCase();
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return '🖼️';
-  if (ext === 'pdf') return '📄';
-  return '📎';
+  const props = { size: 28, strokeWidth: 1.5, className: 'text-wa-muted', 'aria-hidden': true };
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return <Image {...props} />;
+  if (ext === 'pdf') return <FileText {...props} />;
+  return <Paperclip {...props} />;
 }
 
 export default function PendingUploadBubble({ file, progress, previewUrl, caption }) {
@@ -27,7 +29,9 @@ export default function PendingUploadBubble({ file, progress, previewUrl, captio
           </div>
         ) : (
           <div className="flex items-center gap-3 px-4 py-3 min-w-[180px]">
-            <span className="text-2xl shrink-0">{fileIcon(file?.name)}</span>
+            <span className="shrink-0">
+              <FileTypeIcon name={file?.name} />
+            </span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{file?.name}</p>
               <p className="text-xs text-wa-muted">Uploading…</p>

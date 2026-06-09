@@ -53,8 +53,22 @@ export function showMessageNotification({ title, body, roomId, onClick }) {
   }
 }
 
-export function messagePreview(msg) {
+export function messagePreview(msg, viewerId = null) {
+  if (msg.message_type === 'call') {
+    const isVideo = msg.call_type === 'video';
+    const kind = isVideo ? 'Video call' : 'Voice call';
+    if (msg.call_status === 'completed') return `📞 ${kind}`;
+    if (msg.call_status === 'missed') {
+      const outgoing = viewerId && msg.user_id === viewerId;
+      return outgoing ? `📞 No answer` : `📞 Missed ${isVideo ? 'video' : 'voice'} call`;
+    }
+    if (msg.call_status === 'declined') return `📞 ${kind} declined`;
+    return `📞 ${kind}`;
+  }
   if (msg.attachment) {
+    const isGif = msg.attachment.mime === 'image/gif'
+      || /\.gif$/i.test(msg.attachment.url || msg.attachment.name || '');
+    if (isGif) return 'GIF';
     const isImg = msg.attachment.mime?.startsWith('image/')
       || /\.(jpe?g|png|gif|webp)$/i.test(msg.attachment.url || msg.attachment.name || '');
     if (isImg) return '📷 Photo';

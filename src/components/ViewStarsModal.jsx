@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ModalCloseBtn from './ModalCloseBtn';
 import AuthenticatedImage from './AuthenticatedImage';
 import Avatar from './Avatar';
 import { markStarsSeen } from '../utils/starSeen';
@@ -147,14 +148,10 @@ export default function ViewStarsModal({ feedItem, viewerId, onClose, onDelete }
                 {new Date(current.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
-            <button
-              type="button"
-              className="text-white/80 hover:text-white px-2 text-xl"
+            <ModalCloseBtn
               onClick={onClose}
-              aria-label="Close"
-            >
-              ✕
-            </button>
+              className="text-white/80 hover:text-white px-2 inline-flex items-center justify-center"
+            />
           </div>
         </div>
       </div>

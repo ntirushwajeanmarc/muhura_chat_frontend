@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ModalCloseBtn from './ModalCloseBtn';
 import { fetchGroupMembers } from '../api/chats';
 import Avatar from './Avatar';
 
@@ -29,9 +30,7 @@ export default function GroupProfileModal({ room, onClose, onAddMembers, onViewP
               {members.length || room?.member_count || 0} members
             </p>
           </div>
-          <button type="button" className="text-wa-muted hover:text-slate-200 px-2 shrink-0" onClick={onClose}>
-            ✕
-          </button>
+          <ModalCloseBtn onClick={onClose} className="text-wa-muted hover:text-slate-200 px-2 shrink-0 inline-flex items-center justify-center" />
         </div>
 
         <div className="px-5 py-3 border-b border-wa-border shrink-0">

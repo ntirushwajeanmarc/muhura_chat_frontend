@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Smile } from 'lucide-react';
+import IconBtn, { composerBtn } from './IconBtn';
 
 const EMOJIS = [
   // Smileys
@@ -188,18 +190,17 @@ export default function EmojiPicker({ onSelect, disabled }) {
 
   return (
     <>
-      <button
+      <IconBtn
         ref={btnRef}
-        type="button"
-        className="w-9 h-9 rounded-lg text-xl hover:bg-wa-panel disabled:opacity-40 shrink-0 transition-colors"
+        icon={Smile}
+        className={composerBtn}
         onClick={toggle}
         disabled={disabled}
         title="Add emoji"
         aria-label="Add emoji"
         aria-expanded={open}
-      >
-        😊
-      </button>
+        size={20}
+      />
       {open && createPortal(
         <div
           ref={panelRef}

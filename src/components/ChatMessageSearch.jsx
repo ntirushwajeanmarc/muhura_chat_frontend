@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ModalCloseBtn from './ModalCloseBtn';
 import { searchRoomMessages } from '../api/messages';
 import { truncateReply } from './ReplyButton';
 
@@ -69,14 +70,10 @@ export default function ChatMessageSearch({ roomId, onJumpToMessage, onClose }) 
           placeholder="Search in this chat…"
           className="flex-1 px-3 py-2 bg-wa-surface border border-wa-border rounded-lg text-sm outline-none focus:border-wa-accent"
         />
-        <button
-          type="button"
+        <ModalCloseBtn
           onClick={onClose}
-          className="w-9 h-9 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface shrink-0"
-          aria-label="Close search"
-        >
-          ✕
-        </button>
+          className="w-9 h-9 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface shrink-0 inline-flex items-center justify-center"
+        />
       </div>
       {query.trim().length > 0 && (
         <div className="max-h-48 overflow-y-auto px-2 pb-2">

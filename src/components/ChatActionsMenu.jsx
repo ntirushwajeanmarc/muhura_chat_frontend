@@ -1,4 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
+import {
+  Phone,
+  Video,
+  Search,
+  UserPlus,
+  Image,
+  MoreVertical,
+} from 'lucide-react';
 
 export default function ChatActionsMenu({
   isDirect,
@@ -38,31 +46,31 @@ export default function ChatActionsMenu({
     isDirect && onVoiceCall && {
       id: 'voice',
       label: 'Voice call',
-      icon: '📞',
+      Icon: Phone,
       onClick: () => run(() => onVoiceCall()),
     },
     isDirect && onVideoCall && {
       id: 'video',
       label: 'Video call',
-      icon: '📹',
+      Icon: Video,
       onClick: () => run(() => onVideoCall()),
     },
     onToggleSearch && {
       id: 'search',
       label: showSearch ? 'Close search' : 'Search messages',
-      icon: '🔍',
+      Icon: Search,
       onClick: () => run(onToggleSearch),
     },
     isGroup && onAddMembers && {
       id: 'members',
       label: 'Add members',
-      icon: '➕',
+      Icon: UserPlus,
       onClick: () => run(onAddMembers),
     },
     onWallpaper && {
       id: 'wallpaper',
       label: 'Change wallpaper',
-      icon: '🖼',
+      Icon: Image,
       onClick: () => run(onWallpaper),
     },
   ].filter(Boolean);
@@ -82,11 +90,7 @@ export default function ChatActionsMenu({
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-          <circle cx="12" cy="5" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="12" cy="19" r="2" />
-        </svg>
+        <MoreVertical size={20} strokeWidth={1.75} aria-hidden />
       </button>
 
       {open && (
@@ -102,7 +106,7 @@ export default function ChatActionsMenu({
               className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-left text-slate-200 hover:bg-wa-surface transition-colors"
               onClick={item.onClick}
             >
-              <span className="text-base w-5 text-center shrink-0" aria-hidden>{item.icon}</span>
+              <item.Icon size={18} strokeWidth={1.75} className="text-wa-muted shrink-0" aria-hidden />
               <span>{item.label}</span>
             </button>
           ))}

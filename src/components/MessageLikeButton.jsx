@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Heart } from 'lucide-react';
 import { toggleMessageLike } from '../api/likes';
 
 const btnClass =
@@ -35,8 +36,12 @@ export default function MessageLikeButton({ messageId, likes, onUpdate }) {
       title={liked ? 'Tap to unlike' : 'Like this message'}
       aria-label={liked ? 'Unlike message' : 'Like message'}
     >
-      <span>{liked ? '❤️' : '🤍'}</span>
-      <span className="hidden xs:inline">{liked ? 'Unlike' : 'Like'}</span>
+      <Heart
+        size={14}
+        strokeWidth={1.75}
+        className={liked ? 'fill-current' : ''}
+        aria-hidden
+      />
       {count > 0 && <span className="font-semibold">{count}</span>}
     </button>
   );

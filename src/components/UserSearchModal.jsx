@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ModalCloseBtn from './ModalCloseBtn';
 import { searchUsers } from '../api/chats';
 import Avatar from './Avatar';
 
@@ -113,9 +114,7 @@ export default function UserSearchModal({
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <ModalCloseBtn onClick={onClose} />
         </div>
 
         <div className="px-4 pt-3 relative">

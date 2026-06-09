@@ -15,8 +15,8 @@ function patchRoomList(list, roomId, preview, at) {
   return changed ? next : list;
 }
 
-export function applyMessageToChatLists(roomId, msg, setters) {
-  const preview = messagePreview(msg);
+export function applyMessageToChatLists(roomId, msg, setters, viewerId = null) {
+  const preview = messagePreview(msg, viewerId);
   const at = msg.created_at || msg.edited_at || new Date().toISOString();
   const { setDirectChats, setGroupChats, setPublicRooms } = setters;
 

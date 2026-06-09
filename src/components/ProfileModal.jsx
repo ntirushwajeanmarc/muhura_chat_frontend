@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchUserProfile, toggleProfileLike } from '../api/likes';
 import { toggleFollow } from '../api/social';
+import { Phone, Video, Heart, Smartphone } from 'lucide-react';
 import Avatar from './Avatar';
 import FollowListModal from './FollowListModal';
+import ModalCloseBtn from './ModalCloseBtn';
 
 export default function ProfileModal({ userId, onClose, onEditProfile, onCall, onOpenProfile }) {
   const { user } = useAuth();
@@ -95,9 +97,7 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall, o
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border">
           <h2 className="text-lg font-semibold">Profile</h2>
-          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <ModalCloseBtn onClick={onClose} />
         </div>
 
         <div className="p-5 flex flex-col items-center gap-4">
@@ -123,7 +123,10 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall, o
                 <p className="text-sm text-slate-300 text-center whitespace-pre-wrap">{profile.bio}</p>
               )}
               {profile.phone && (
-                <p className="text-sm text-wa-muted">📱 {profile.phone}</p>
+                <p className="text-sm text-wa-muted inline-flex items-center gap-1.5">
+                  <Smartphone size={14} strokeWidth={1.75} className="shrink-0" aria-hidden />
+                  {profile.phone}
+                </p>
               )}
               <div className="flex items-center gap-4 pt-2 flex-wrap justify-center">
                 <button
@@ -177,23 +180,25 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall, o
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        className="flex-1 py-2.5 bg-wa-surface hover:bg-wa-border border border-wa-border rounded-lg text-slate-200 text-sm font-semibold"
+                        className="flex-1 py-2.5 bg-wa-surface hover:bg-wa-border border border-wa-border rounded-lg text-slate-200 text-sm font-semibold inline-flex items-center justify-center gap-2"
                         onClick={() => {
                           onCall(profile, 'audio');
                           onClose();
                         }}
                       >
-                        📞 Voice
+                        <Phone size={16} strokeWidth={1.75} aria-hidden />
+                        Voice
                       </button>
                       <button
                         type="button"
-                        className="flex-1 py-2.5 bg-wa-surface hover:bg-wa-border border border-wa-border rounded-lg text-slate-200 text-sm font-semibold"
+                        className="flex-1 py-2.5 bg-wa-surface hover:bg-wa-border border border-wa-border rounded-lg text-slate-200 text-sm font-semibold inline-flex items-center justify-center gap-2"
                         onClick={() => {
                           onCall(profile, 'video');
                           onClose();
                         }}
                       >
-                        📹 Video
+                        <Video size={16} strokeWidth={1.75} aria-hidden />
+                        Video
                       </button>
                     </div>
                   )}
@@ -208,7 +213,19 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall, o
                     disabled={likeBusy}
                     title={profile.liked_by_me ? 'Tap to unlike' : 'Like this profile'}
                   >
-                    {likeBusy ? '…' : profile.liked_by_me ? '❤️ Unlike' : '🤍 Like profile'}
+                    {likeBusy ? (
+                      '…'
+                    ) : (
+                      <span className="inline-flex items-center justify-center gap-2">
+                        <Heart
+                          size={16}
+                          strokeWidth={1.75}
+                          className={profile.liked_by_me ? 'fill-current' : ''}
+                          aria-hidden
+                        />
+                        {profile.liked_by_me ? 'Unlike' : 'Like profile'}
+                      </span>
+                    )}
                   </button>
                 </div>
               )}

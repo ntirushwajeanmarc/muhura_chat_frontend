@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
+import { Star, X } from 'lucide-react';
 import { postStar } from '../api/social';
 import CircularProgress from './CircularProgress';
+import ModalCloseBtn from './ModalCloseBtn';
 
 export default function CreateStarModal({ onPosted, onClose }) {
   const [content, setContent] = useState('');
@@ -50,10 +52,11 @@ export default function CreateStarModal({ onPosted, onClose }) {
         onSubmit={handleSubmit}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border">
-          <h2 className="text-lg font-semibold">New star ⭐</h2>
-          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose}>
-            ✕
-          </button>
+          <h2 className="text-lg font-semibold inline-flex items-center gap-2">
+            <Star size={18} strokeWidth={1.75} className="text-amber-400" aria-hidden />
+            New star
+          </h2>
+          <ModalCloseBtn onClick={onClose} />
         </div>
 
         <div className="p-5 flex flex-col gap-4">
@@ -83,14 +86,15 @@ export default function CreateStarModal({ onPosted, onClose }) {
               <img src={preview} alt="" className="w-full max-h-48 object-cover" />
               <button
                 type="button"
-                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white text-sm"
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white inline-flex items-center justify-center"
                 onClick={() => {
                   URL.revokeObjectURL(preview);
                   setPreview(null);
                   setImage(null);
                 }}
+                aria-label="Remove image"
               >
-                ✕
+                <X size={16} strokeWidth={1.75} aria-hidden />
               </button>
             </div>
           ) : (

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import ModalCloseBtn from './ModalCloseBtn';
 import { useAuth } from '../context/AuthContext';
 import { WALLPAPERS } from '../utils/wallpapers';
 import { updateProfile, uploadWallpaper } from '../api/profile';
@@ -65,9 +66,7 @@ export default function WallpaperPicker({ current, onSelect, onClose, updateSess
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border">
           <h2 className="text-lg font-semibold">Chat wallpaper</h2>
-          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose}>
-            ✕
-          </button>
+          <ModalCloseBtn onClick={onClose} />
         </div>
 
         {error && <p className="px-5 pt-3 text-sm text-red-400">{error}</p>}

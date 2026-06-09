@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ModalCloseBtn from './ModalCloseBtn';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
@@ -64,14 +65,10 @@ export default function InstallPwaPrompt() {
                   Add to your home screen for faster access and full-screen chat.
                 </p>
               </div>
-              <button
-                type="button"
+              <ModalCloseBtn
                 onClick={dismiss}
-                className="w-8 h-8 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface shrink-0"
-                aria-label="Dismiss install prompt"
-              >
-                ✕
-              </button>
+                className="w-8 h-8 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface shrink-0 inline-flex items-center justify-center"
+              />
             </div>
             <div className="flex gap-2 mt-3">
               <button

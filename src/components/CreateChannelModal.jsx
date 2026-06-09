@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ModalCloseBtn from './ModalCloseBtn';
 import { createChannel } from '../api/chats';
 
 const inputClass =
@@ -49,9 +50,7 @@ export default function CreateChannelModal({ onCreate, onClose, initialName = ''
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border">
           <h2 className="text-lg font-semibold">New channel</h2>
-          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <ModalCloseBtn onClick={onClose} />
         </div>
 
         <form onSubmit={handleCreate} className="p-4 flex flex-col gap-4">

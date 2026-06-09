@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ModalCloseBtn from './ModalCloseBtn';
 import { createPortal } from 'react-dom';
 import { fetchFollowers, fetchFollowing } from '../api/social';
 import Avatar from './Avatar';
@@ -27,9 +28,7 @@ export default function FollowListModal({ userId, type, title, onClose, onSelect
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-wa-border shrink-0">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <button type="button" className="text-wa-muted hover:text-slate-200 px-2" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <ModalCloseBtn onClick={onClose} />
         </div>
 
         <div className="overflow-y-auto flex-1 p-2">
