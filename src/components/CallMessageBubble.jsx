@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, Video, PhoneIncoming, PhoneOutgoing } from 'lucide-react';
+import { Phone, Video, PhoneMissed } from 'lucide-react';
 import {
   getCallMessageLabel,
   isMissedCallForViewer,
@@ -11,25 +11,38 @@ export default function CallMessageBubble({ message, viewerId, formatTime }) {
   const missed = isMissedCallForViewer(message, viewerId);
   const label = getCallMessageLabel(message, viewerId);
 
-  const CallIcon = isVideo ? Video : Phone;
-  const DirectionIcon = isOutgoing ? PhoneOutgoing : PhoneIncoming;
+  const Icon = missed ? PhoneMissed : (isVideo ? Video : Phone);
+
+  const alignClass = missed
+    ? 'justify-start pl-2 sm:pl-3'
+    : isOutgoing
+      ? 'justify-end pr-2 sm:pr-3'
+      : 'justify-start pl-2 sm:pl-3';
 
   return (
-    <div className="flex justify-center py-2">
+    <div className={`flex w-full py-2 ${alignClass}`}>
       <div
-        className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm border shadow-sm max-w-[min(92%,360px)] ${
+        className={`inline-flex items-center gap-3 px-3 py-2.5 rounded-xl max-w-[min(94%,400px)] ${
           missed
-            ? 'bg-red-950/40 border-red-500/30 text-red-300'
-            : 'bg-wa-panel/90 border-wa-border/80 text-wa-muted'
+            ? 'bg-red-500/20 border border-red-400/50 shadow-sm'
+            : 'bg-wa-panel/95 border border-wa-border shadow-sm'
         }`}
+        role="status"
         aria-label={label}
       >
-        <CallIcon size={16} strokeWidth={1.75} className={missed ? 'text-red-400' : 'text-wa-accent'} aria-hidden />
-        <span className={`font-medium ${missed ? 'text-red-300' : 'text-slate-200'}`}>
+        <span
+          className={`flex items-center justify-center w-9 h-9 rounded-full shrink-0 ${
+            missed
+              ? 'bg-red-500/30 text-red-400'
+              : 'bg-wa-accent/20 text-wa-accent'
+          }`}
+        >
+          <Icon size={20} strokeWidth={2} aria-hidden />
+        </span>
+        <span className={`text-sm font-semibold leading-tight ${missed ? 'text-red-200' : 'text-slate-100'}`}>
           {label}
         </span>
-        <DirectionIcon size={12} className="text-wa-muted/80" aria-hidden />
-        <span className="text-[10px] text-wa-muted/90 ml-1">
+        <span className="text-[11px] text-wa-muted shrink-0 tabular-nums">
           {formatTime(message.created_at)}
         </span>
       </div>

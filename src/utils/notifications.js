@@ -58,11 +58,13 @@ export function messagePreview(msg, viewerId = null) {
     const isVideo = msg.call_type === 'video';
     const kind = isVideo ? 'Video call' : 'Voice call';
     if (msg.call_status === 'completed') return `📞 ${kind}`;
-    if (msg.call_status === 'missed') {
+    if (msg.call_status === 'missed' || msg.call_status === 'declined') {
       const outgoing = viewerId && msg.user_id === viewerId;
-      return outgoing ? `📞 No answer` : `📞 Missed ${isVideo ? 'video' : 'voice'} call`;
+      if (outgoing) {
+        return msg.call_status === 'declined' ? `📞 ${kind} declined` : '📞 No answer';
+      }
+      return `📞 Missed ${isVideo ? 'video' : 'voice'} call`;
     }
-    if (msg.call_status === 'declined') return `📞 ${kind} declined`;
     return `📞 ${kind}`;
   }
   if (msg.attachment) {

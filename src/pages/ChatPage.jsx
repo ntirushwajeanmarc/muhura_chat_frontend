@@ -968,8 +968,8 @@ export default function ChatPage() {
     const grouped = [];
     msgs.forEach((msg, i) => {
       const prev = msgs[i - 1];
-      const isCall = msg.message_type === 'call';
-      const prevIsCall = prev?.message_type === 'call';
+      const isCall = msg.message_type === 'call' || (msg.call_status && msg.call_type);
+      const prevIsCall = prev?.message_type === 'call' || (prev?.call_status && prev?.call_type);
       const sameUser = !isCall && !prevIsCall && prev?.username === msg.username;
       const sameMinute = prev && Math.abs(new Date(msg.created_at) - new Date(prev.created_at)) < 60000;
       grouped.push({ ...msg, grouped: sameUser && sameMinute });
@@ -1859,7 +1859,7 @@ export default function ChatPage() {
               </>
             )}
             renderItem={(msg) => (
-            msg.message_type === 'call' ? (
+            (msg.message_type === 'call' || (msg.call_status && msg.call_type)) ? (
               <div key={msg.id} id={`msg-${msg.id}`}>
                 <CallMessageBubble message={msg} viewerId={user?.id} formatTime={formatTime} />
               </div>

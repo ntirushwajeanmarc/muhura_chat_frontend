@@ -19,12 +19,12 @@ export function getCallMessageLabel(msg, viewerId) {
     }
     case 'missed':
       return isOutgoing
-        ? `No answer`
+        ? 'No answer'
         : `Missed ${isVideo ? 'video' : 'voice'} call`;
     case 'declined':
       return isOutgoing
         ? `${kind} declined`
-        : `Declined ${isVideo ? 'video' : 'voice'} call`;
+        : `Missed ${isVideo ? 'video' : 'voice'} call`;
     default:
       return kind;
   }
@@ -32,8 +32,8 @@ export function getCallMessageLabel(msg, viewerId) {
 
 export function isMissedCallForViewer(msg, viewerId) {
   return msg.message_type === 'call'
-    && msg.call_status === 'missed'
-    && msg.user_id !== viewerId;
+    && msg.user_id !== viewerId
+    && (msg.call_status === 'missed' || msg.call_status === 'declined');
 }
 
 export function callMessagePreview(msg, viewerId) {
