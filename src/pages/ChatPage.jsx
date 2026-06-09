@@ -155,6 +155,7 @@ export default function ChatPage() {
   const [listSearchQuery, setListSearchQuery] = useState('');
   const [showMessageSearch, setShowMessageSearch] = useState(false);
   const [highlightMessageId, setHighlightMessageId] = useState(null);
+  const [messageActionsId, setMessageActionsId] = useState(null);
   const [discoverList, setDiscoverList] = useState([]);
   const [channelSearchResults, setChannelSearchResults] = useState([]);
   const [joiningChannelId, setJoiningChannelId] = useState(null);
@@ -493,6 +494,7 @@ export default function ChatPage() {
     setOnlineUsers([]);
     setReplyingTo(null);
     setEditingMessageId(null);
+    setMessageActionsId(null);
     setEditDraft('');
     setEditError(null);
     setPendingUpload((prev) => {
@@ -519,6 +521,16 @@ export default function ChatPage() {
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
   }, [isNearBottom, activeRoom?.id, loadOlderMessages]);
+
+  useEffect(() => {
+    if (!messageActionsId || !isMobile) return undefined;
+    const close = (e) => {
+      if (e.target.closest(`#msg-${messageActionsId}`)) return;
+      setMessageActionsId(null);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [messageActionsId, isMobile]);
 
   useEffect(() => {
     if (!connected) return undefined;
@@ -1644,13 +1656,24 @@ export default function ChatPage() {
                     isOwn(msg)
                       ? 'bg-wa-bubble rounded-2xl rounded-br-md px-2.5 py-1.5 sm:px-3 sm:py-2'
                       : 'bg-wa-surface rounded-2xl rounded-bl-md px-2.5 py-1.5 sm:px-3 sm:py-2'
-                  }`}
+                  } ${isMobile ? 'cursor-pointer' : ''}`}
+                  onClick={
+                    isMobile
+                      ? (e) => {
+                          e.stopPropagation();
+                          setMessageActionsId((prev) => (prev === msg.id ? null : msg.id));
+                        }
+                      : undefined
+                  }
                 >
                   {msg.reply_to && (
                     <button
                       type="button"
                       className="flex flex-col gap-0.5 mb-2 p-2 border-l-[3px] border-wa-accent rounded bg-black/20 text-xs max-w-full text-left w-full hover:bg-black/30 cursor-pointer transition-colors"
-                      onClick={() => msg.reply_to?.id && handleJumpToMessage(msg.reply_to.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (msg.reply_to?.id) handleJumpToMessage(msg.reply_to.id);
+                      }}
                       title="Jump to original message"
                     >
                       <span className="font-semibold text-wa-accent-hover">@{msg.reply_to.username}</span>
@@ -1738,9 +1761,13 @@ export default function ChatPage() {
                 </div>
                 {editingMessageId !== msg.id && (
                   <div
-                    className={`flex items-center gap-0.5 mt-0.5 px-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity ${
-                      isOwn(msg) ? 'justify-end' : 'justify-start'
-                    }`}
+                    className={`flex items-center gap-0.5 mt-0.5 px-0.5 transition-opacity ${
+                      isMobile
+                        ? messageActionsId === msg.id
+                          ? 'opacity-100'
+                          : 'hidden'
+                        : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                    } ${isOwn(msg) ? 'justify-end' : 'justify-start'}`}
                   >
                     <ReplyButton
                       onClick={() => startReply(msg)}

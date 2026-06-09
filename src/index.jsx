@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import { setupPushNotifications } from './utils/pushSubscription';
 import { unlockSounds, handleServiceWorkerAlert } from './utils/sounds';
+import { setPwaUpdateHandler, notifyPwaUpdateAvailable } from './utils/pwaUpdate';
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
@@ -20,12 +21,15 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-registerSW({
+const updateSW = registerSW({
   immediate: true,
+  onNeedRefresh() {
+    notifyPwaUpdateAvailable();
+  },
   onRegisteredSW(_swUrl, registration) {
     if (!registration) return;
     setupPushNotifications(registration);
-    // Check for updates in the background; new version applies on next app restart
+    setPwaUpdateHandler((reload) => updateSW(reload));
     setInterval(() => registration.update(), UPDATE_CHECK_MS);
   },
   onRegisterError(error) {
