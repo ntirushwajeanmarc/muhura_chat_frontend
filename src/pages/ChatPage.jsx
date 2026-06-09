@@ -1274,9 +1274,10 @@ export default function ChatPage() {
 
   const showSidebar = !isMobile || mobileShowList;
   const showChat = !isMobile || !mobileShowList;
+  const mobileComposerDock = isMobile && showChat && activeRoom;
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full min-h-0 max-h-full overflow-hidden">
       {showNewChat && (
         <UserSearchModal title="New chat" onSelect={handleStartDirect} onClose={() => setShowNewChat(false)} />
       )}
@@ -1720,7 +1721,7 @@ export default function ChatPage() {
       </aside>
 
       <main
-        className={`flex-1 flex flex-col overflow-hidden bg-wa-chat min-w-0 ${
+        className={`flex-1 flex flex-col min-h-0 overflow-hidden bg-wa-chat min-w-0 ${
           showChat ? '' : 'hidden md:flex'
         }`}
       >
@@ -1807,7 +1808,13 @@ export default function ChatPage() {
         <ChatWallpaper
           user={user}
           innerRef={messagesAreaRef}
-          scrollClassName={!activeRoom ? 'flex items-center justify-center' : ''}
+          scrollClassName={
+            !activeRoom
+              ? 'flex items-center justify-center'
+              : mobileComposerDock
+                ? (replyingTo ? 'composer-scroll-pad-reply' : 'composer-scroll-pad')
+                : ''
+          }
         >
           {!activeRoom && (
             <div className="text-center px-6 max-w-sm">
@@ -1817,7 +1824,7 @@ export default function ChatPage() {
             </div>
           )}
           {activeRoom && (
-          <div className="w-full max-w-3xl lg:max-w-4xl mx-auto p-3 sm:p-5 flex flex-col gap-0.5 min-h-full" role="log" aria-label="Chat messages" aria-live="polite">
+          <div className="w-full max-w-3xl lg:max-w-4xl mx-auto p-3 sm:p-5 flex flex-col gap-0.5 min-h-full justify-end" role="log" aria-label="Chat messages" aria-live="polite">
           <VirtualMessageList
             ref={messageListRef}
             scrollRef={messagesAreaRef}
@@ -2038,85 +2045,168 @@ export default function ChatPage() {
           )}
         </ChatWallpaper>
 
-        {replyingTo && activeRoom && (
-          <div className="flex items-start gap-3 px-3 sm:px-5 py-3 border-t border-wa-border bg-wa-panel shrink-0">
-            <div className="flex-1 min-w-0 border-l-[3px] border-wa-accent pl-2.5 py-0.5">
-              <span className="block text-xs font-semibold text-wa-accent-hover mb-1">
-                Replying to @{replyingTo.username}
-              </span>
-              <span className="block text-sm text-wa-muted break-words line-clamp-2">
-                {truncateReply(replyingTo.content, 120)}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="touch-target w-9 h-9 shrink-0 rounded-md bg-wa-surface text-wa-muted hover:text-slate-200 flex items-center justify-center"
-              onClick={() => setReplyingTo(null)}
-              aria-label="Cancel reply"
+        {mobileComposerDock ? (
+          <div className="fixed inset-x-0 bottom-0 z-30 bg-wa-panel border-t border-wa-border shadow-[0_-6px_20px_rgba(0,0,0,0.35)] pb-safe">
+            {replyingTo && (
+              <div className="flex items-start gap-2 px-2 py-2 border-b border-wa-border/60">
+                <div className="flex-1 min-w-0 border-l-[3px] border-wa-accent pl-2 py-0.5">
+                  <span className="block text-xs font-semibold text-wa-accent-hover mb-0.5">
+                    Replying to @{replyingTo.username}
+                  </span>
+                  <span className="block text-sm text-wa-muted break-words line-clamp-2">
+                    {truncateReply(replyingTo.content, 120)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="w-9 h-9 shrink-0 rounded-md bg-wa-surface text-wa-muted hover:text-slate-200 flex items-center justify-center"
+                  onClick={() => setReplyingTo(null)}
+                  aria-label="Cancel reply"
+                >
+                  <X size={18} strokeWidth={1.75} aria-hidden />
+                </button>
+              </div>
+            )}
+            <form
+              className={`flex items-end gap-1.5 px-2 py-2 ${!activeRoom ? 'opacity-50 pointer-events-none' : ''}`}
+              onSubmit={handleSend}
             >
-              <X size={18} strokeWidth={1.75} aria-hidden />
-            </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+                onChange={handleFileSelect}
+              />
+              <div className="flex-1 min-w-0 flex items-end gap-1 bg-wa-surface border border-wa-border rounded-xl px-1.5 py-1 focus-within:border-wa-accent transition-colors">
+                <IconBtn
+                  icon={Paperclip}
+                  className={`${composerBtn} w-9 h-9 shrink-0`}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!activeRoom || uploading}
+                  title="Attach file"
+                  aria-label="Attach file"
+                  size={18}
+                />
+                <GifPicker
+                  onSelect={handleGifSelect}
+                  disabled={!activeRoom}
+                  sending={sendingGif}
+                />
+                <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
+                <textarea
+                  ref={inputRef}
+                  className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm py-1.5 min-h-8 max-h-32 resize-none placeholder:text-wa-muted"
+                  value={input}
+                  onChange={handleInputChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && replyingTo) {
+                      e.preventDefault();
+                      setReplyingTo(null);
+                      return;
+                    }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend(e);
+                    }
+                  }}
+                  placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : placeholder}
+                  disabled={!activeRoom}
+                  rows={1}
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-10 h-10 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white transition-colors shrink-0 inline-flex items-center justify-center"
+                disabled={!input.trim()}
+                aria-label="Send message"
+              >
+                <Send size={18} strokeWidth={1.75} aria-hidden />
+              </button>
+            </form>
           </div>
-        )}
+        ) : (
+          <>
+            {replyingTo && activeRoom && (
+              <div className="flex items-start gap-3 px-3 sm:px-5 py-3 border-t border-wa-border bg-wa-panel shrink-0">
+                <div className="flex-1 min-w-0 border-l-[3px] border-wa-accent pl-2.5 py-0.5">
+                  <span className="block text-xs font-semibold text-wa-accent-hover mb-1">
+                    Replying to @{replyingTo.username}
+                  </span>
+                  <span className="block text-sm text-wa-muted break-words line-clamp-2">
+                    {truncateReply(replyingTo.content, 120)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="touch-target w-9 h-9 shrink-0 rounded-md bg-wa-surface text-wa-muted hover:text-slate-200 flex items-center justify-center"
+                  onClick={() => setReplyingTo(null)}
+                  aria-label="Cancel reply"
+                >
+                  <X size={18} strokeWidth={1.75} aria-hidden />
+                </button>
+              </div>
+            )}
 
-        <form
-          className={`flex items-end gap-2 px-3 sm:px-5 py-2.5 sm:py-3 border-t border-wa-border bg-wa-panel pb-safe ${!activeRoom ? 'opacity-50 pointer-events-none' : ''}`}
-          onSubmit={handleSend}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
-            onChange={handleFileSelect}
-          />
-          <div className="flex-1 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors overflow-visible">
-            <IconBtn
-              icon={Paperclip}
-              className={`${composerBtn} w-10 h-10`}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!activeRoom || uploading}
-              title="Attach file"
-              aria-label="Attach file"
-              size={20}
-            />
-            <GifPicker
-              onSelect={handleGifSelect}
-              disabled={!activeRoom}
-              sending={sendingGif}
-            />
-            <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
-            <textarea
-              ref={inputRef}
-              className="flex-1 bg-transparent border-none outline-none text-sm py-2 min-h-9 max-h-40 resize-none placeholder:text-wa-muted"
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape' && replyingTo) {
-                  e.preventDefault();
-                  setReplyingTo(null);
-                  return;
-                }
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend(e);
-                }
-              }}
-              placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : placeholder}
-              disabled={!activeRoom}
-              rows={1}
-              autoFocus
-            />
-          </div>
-          <button
-            type="submit"
-            className="touch-target px-4 py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white transition-colors shrink-0 inline-flex items-center justify-center"
-            disabled={!input.trim()}
-            aria-label="Send message"
-          >
-            <Send size={20} strokeWidth={1.75} aria-hidden />
-          </button>
-        </form>
+            <form
+              className={`flex items-end gap-2 px-3 sm:px-5 py-2.5 sm:py-3 border-t border-wa-border bg-wa-panel shrink-0 ${!activeRoom ? 'opacity-50 pointer-events-none' : ''}`}
+              onSubmit={handleSend}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+                onChange={handleFileSelect}
+              />
+              <div className="flex-1 min-w-0 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors">
+                <IconBtn
+                  icon={Paperclip}
+                  className={`${composerBtn} w-10 h-10 shrink-0`}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!activeRoom || uploading}
+                  title="Attach file"
+                  aria-label="Attach file"
+                  size={20}
+                />
+                <GifPicker
+                  onSelect={handleGifSelect}
+                  disabled={!activeRoom}
+                  sending={sendingGif}
+                />
+                <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
+                <textarea
+                  ref={inputRef}
+                  className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm py-2 min-h-9 max-h-40 resize-none placeholder:text-wa-muted"
+                  value={input}
+                  onChange={handleInputChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && replyingTo) {
+                      e.preventDefault();
+                      setReplyingTo(null);
+                      return;
+                    }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend(e);
+                    }
+                  }}
+                  placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : placeholder}
+                  disabled={!activeRoom}
+                  rows={1}
+                />
+              </div>
+              <button
+                type="submit"
+                className="touch-target px-4 py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 rounded-xl text-white transition-colors shrink-0 inline-flex items-center justify-center"
+                disabled={!input.trim()}
+                aria-label="Send message"
+              >
+                <Send size={20} strokeWidth={1.75} aria-hidden />
+              </button>
+            </form>
+          </>
+        )}
       </main>
     </div>
   );

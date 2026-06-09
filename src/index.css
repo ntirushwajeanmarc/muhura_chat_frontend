@@ -101,6 +101,15 @@
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
+  /* Reserve space above the fixed mobile composer so messages are not hidden */
+  .composer-scroll-pad {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .composer-scroll-pad-reply {
+    padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .pt-safe {
     padding-top: max(0px, env(safe-area-inset-top));
   }
