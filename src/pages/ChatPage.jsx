@@ -46,6 +46,7 @@ import WallpaperPicker from '../components/WallpaperPicker';
 import CallModal from '../components/CallModal';
 import ChatWallpaper from '../components/ChatWallpaper';
 import ChatMessageSearch from '../components/ChatMessageSearch';
+import ChatActionsMenu from '../components/ChatActionsMenu';
 import { fetchStarsFeed, deleteStar } from '../api/social';
 import StarsBar from '../components/StarsBar';
 import CreateStarModal from '../components/CreateStarModal';
@@ -1572,65 +1573,18 @@ export default function ChatPage() {
               <p className="font-semibold text-sm sm:text-base text-wa-muted">Select a conversation</p>
             </div>
           )}
-          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-            {activeRoom?.type === 'direct' && activeRoom.peer && (
-              <>
-                <button
-                  type="button"
-                  className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
-                  onClick={() => handleStartCall('audio')}
-                  title="Voice call"
-                  aria-label="Voice call"
-                >
-                  📞
-                </button>
-                <button
-                  type="button"
-                  className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
-                  onClick={() => handleStartCall('video')}
-                  title="Video call"
-                  aria-label="Video call"
-                >
-                  📹
-                </button>
-              </>
-            )}
-            {activeRoom && (
-              <button
-                type="button"
-                className={`touch-target w-10 h-10 rounded-lg flex items-center justify-center ${
-                  showMessageSearch ? 'bg-wa-accent/20 text-wa-accent' : 'text-wa-muted hover:text-slate-200 hover:bg-wa-surface'
-                }`}
-                onClick={() => setShowMessageSearch((v) => !v)}
-                title="Search messages"
-                aria-label="Search messages"
-              >
-                🔍
-              </button>
-            )}
-            {activeRoom?.type === 'group' && (
-              <button
-                type="button"
-                className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
-                onClick={openAddMembers}
-                title="Add members"
-                aria-label="Add members"
-              >
-                ➕
-              </button>
-            )}
-            {activeRoom && (
-              <button
-                type="button"
-                className="touch-target w-10 h-10 rounded-lg text-wa-muted hover:text-slate-200 hover:bg-wa-surface flex items-center justify-center"
-                onClick={() => setShowWallpaper(true)}
-                title="Change wallpaper"
-                aria-label="Change wallpaper"
-              >
-                🖼
-              </button>
-            )}
-          </div>
+          {activeRoom && (
+            <ChatActionsMenu
+              isDirect={activeRoom.type === 'direct' && Boolean(activeRoom.peer)}
+              isGroup={activeRoom.type === 'group'}
+              showSearch={showMessageSearch}
+              onVoiceCall={activeRoom.type === 'direct' && activeRoom.peer ? () => handleStartCall('audio') : null}
+              onVideoCall={activeRoom.type === 'direct' && activeRoom.peer ? () => handleStartCall('video') : null}
+              onToggleSearch={() => setShowMessageSearch((v) => !v)}
+              onWallpaper={() => setShowWallpaper(true)}
+              onAddMembers={activeRoom.type === 'group' ? openAddMembers : null}
+            />
+          )}
         </header>
 
         {showMessageSearch && activeRoom && (
@@ -1684,9 +1638,9 @@ export default function ChatPage() {
                   <span className="text-[11px] text-wa-muted">{formatTime(msg.created_at)}</span>
                 </div>
               )}
-              <div className={`group flex ${isOwn(msg) ? 'justify-end' : ''} ${!isOwn(msg) ? 'pl-[42px]' : ''}`}>
+              <div className={`group flex flex-col ${isOwn(msg) ? 'items-end' : 'items-start'} ${!isOwn(msg) ? 'pl-[42px]' : ''}`}>
                 <div
-                  className={`relative w-fit max-w-[min(88%,400px)] sm:max-w-[min(78%,440px)] text-sm leading-snug shadow-sm ${
+                  className={`w-fit max-w-[min(88%,400px)] sm:max-w-[min(78%,440px)] text-sm leading-snug shadow-sm ${
                     isOwn(msg)
                       ? 'bg-wa-bubble rounded-2xl rounded-br-md px-2.5 py-1.5 sm:px-3 sm:py-2'
                       : 'bg-wa-surface rounded-2xl rounded-bl-md px-2.5 py-1.5 sm:px-3 sm:py-2'
@@ -1775,49 +1729,6 @@ export default function ChatPage() {
                       </div>
                     )
                   )}
-                  {editingMessageId !== msg.id && (msg.likes?.count > 0) && (
-                    <div className={`flex mt-0.5 ${isOwn(msg) ? 'justify-end' : 'justify-start'}`}>
-                      <MessageLikeButton
-                        messageId={msg.id}
-                        likes={msg.likes}
-                        onUpdate={(likes) => updateMessageLikes(msg.id, likes)}
-                      />
-                    </div>
-                  )}
-                  {editingMessageId !== msg.id && (
-                    <div
-                      className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ${
-                        isOwn(msg) ? 'right-full mr-1' : 'left-full ml-1'
-                      }`}
-                    >
-                      <ReplyButton
-                        onClick={() => startReply(msg)}
-                        className="flex items-center justify-center w-7 h-7 rounded-full bg-wa-panel/95 border border-wa-border text-wa-muted hover:text-slate-200 shadow-md"
-                      />
-                      {isOwn(msg) && (
-                        <EditButton
-                          onClick={() => startEdit(msg)}
-                          className="flex items-center justify-center w-7 h-7 rounded-full bg-wa-panel/95 border border-wa-border text-wa-muted hover:text-slate-200 shadow-md"
-                        />
-                      )}
-                      {msg.content && (
-                        <CopyButton
-                          text={msg.content}
-                          title="Copy message"
-                          className="flex items-center justify-center w-7 h-7 rounded-full bg-wa-panel/95 border border-wa-border text-wa-muted hover:text-slate-200 shadow-md"
-                        />
-                      )}
-                      {(msg.likes?.count ?? 0) === 0 && (
-                        <span className="inline-flex">
-                          <MessageLikeButton
-                            messageId={msg.id}
-                            likes={msg.likes || { count: 0, liked_by_me: false }}
-                            onUpdate={(likes) => updateMessageLikes(msg.id, likes)}
-                          />
-                        </span>
-                      )}
-                    </div>
-                  )}
                   {!isOwn(msg) && !msg.content && msg.edited_at && editingMessageId !== msg.id && (
                     <span className="block text-[10px] text-wa-muted text-right mt-0.5 italic">edited</span>
                   )}
@@ -1825,6 +1736,36 @@ export default function ChatPage() {
                     <span className="block text-[10px] text-wa-muted text-right mt-0.5">{formatTime(msg.created_at)}</span>
                   )}
                 </div>
+                {editingMessageId !== msg.id && (
+                  <div
+                    className={`flex items-center gap-0.5 mt-0.5 px-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity ${
+                      isOwn(msg) ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    <ReplyButton
+                      onClick={() => startReply(msg)}
+                      className="flex items-center justify-center w-7 h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-wa-surface/80"
+                    />
+                    {isOwn(msg) && (
+                      <EditButton
+                        onClick={() => startEdit(msg)}
+                        className="flex items-center justify-center w-7 h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-wa-surface/80"
+                      />
+                    )}
+                    {msg.content && (
+                      <CopyButton
+                        text={msg.content}
+                        title="Copy message"
+                        className="flex items-center justify-center w-7 h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-wa-surface/80"
+                      />
+                    )}
+                    <MessageLikeButton
+                      messageId={msg.id}
+                      likes={msg.likes || { count: 0, liked_by_me: false }}
+                      onUpdate={(likes) => updateMessageLikes(msg.id, likes)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ))}

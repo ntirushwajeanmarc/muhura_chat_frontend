@@ -14,6 +14,10 @@ function normalizeSdp(sdp) {
   return null;
 }
 
+function isMobileCallDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function toIceCandidateInit(candidate) {
   if (!candidate || typeof candidate !== 'object') return null;
   if (!candidate.candidate) return null;
@@ -59,25 +63,34 @@ export function useCall(socket, currentUser, connected) {
     }
   }, []);
 
+  const playRemoteAudio = useCallback(async () => {
+    const el = remoteAudioRef.current;
+    if (!el) return;
+    el.muted = false;
+    try {
+      await el.play();
+    } catch {
+      /* autoplay blocked until user gesture — retry on next attach */
+    }
+  }, []);
+
   const applySpeakerOutput = useCallback(async (enabled) => {
     const el = remoteAudioRef.current;
     if (!el) return;
-    el.volume = enabled ? 1 : 0.55;
-    if (typeof el.setSinkId !== 'function') return;
+    el.muted = false;
+    el.volume = 1;
+    if (!isMobileCallDevice() || typeof el.setSinkId !== 'function') return;
     try {
       const outputs = outputDevicesRef.current.length
         ? outputDevicesRef.current
         : await refreshOutputDevices();
-      if (!outputs.length) {
-        await el.setSinkId('');
-        return;
-      }
+      if (!outputs.length) return;
       if (enabled) {
         const speaker = outputs.find((d) => /speaker|default/i.test(d.label)) || outputs[0];
-        await el.setSinkId(speaker.deviceId);
+        if (speaker?.deviceId) await el.setSinkId(speaker.deviceId);
       } else {
         const earpiece = outputs.find((d) => /earpiece|handset|phone|receiver/i.test(d.label));
-        await el.setSinkId(earpiece?.deviceId || '');
+        if (earpiece?.deviceId) await el.setSinkId(earpiece.deviceId);
       }
     } catch {
       /* setSinkId not supported or blocked */
@@ -95,11 +108,14 @@ export function useCall(socket, currentUser, connected) {
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = stream;
       applySpeakerOutput(speakerOn);
+      playRemoteAudio();
     }
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = stream;
+      remoteVideoRef.current.muted = false;
+      remoteVideoRef.current.play().catch(() => {});
     }
-  }, [applySpeakerOutput, speakerOn]);
+  }, [applySpeakerOutput, speakerOn, playRemoteAudio]);
 
   const setMicMuted = useCallback((muted) => {
     setIsMuted(muted);
@@ -218,7 +234,7 @@ export function useCall(socket, currentUser, connected) {
     if (!peerUser?.id) return;
     setCallError(null);
     const settings = getCallSettings();
-    setSpeakerOn(settings.defaultSpeaker);
+    setSpeakerOn(isMobileCallDevice() ? settings.defaultSpeaker : true);
     const isVideo = callType === 'video';
     try {
       await refreshOutputDevices();
@@ -260,7 +276,7 @@ export function useCall(socket, currentUser, connected) {
     if (!socket?.connected || !invite) return;
     stopRingtone();
     const settings = getCallSettings();
-    setSpeakerOn(settings.defaultSpeaker);
+    setSpeakerOn(isMobileCallDevice() ? settings.defaultSpeaker : true);
     const isVideo = invite.callType === 'video';
     try {
       await refreshOutputDevices();
@@ -315,8 +331,11 @@ export function useCall(socket, currentUser, connected) {
   useEffect(() => {
     if (callState?.status === 'active') {
       applySpeakerOutput(speakerOn);
+      if (remoteStreamRef.current) {
+        attachRemoteStream(remoteStreamRef.current);
+      }
     }
-  }, [callState?.status, speakerOn, applySpeakerOutput]);
+  }, [callState?.status, speakerOn, applySpeakerOutput, attachRemoteStream]);
 
   useEffect(() => {
     if (callState?.localStream) {

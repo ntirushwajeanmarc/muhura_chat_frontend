@@ -73,7 +73,7 @@ export default function CallModal({
 
   return (
     <div className="fixed inset-0 z-[60] bg-black flex flex-col">
-      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+      <audio ref={remoteAudioRef} autoPlay playsInline muted={false} className="hidden" />
 
       {showVideo && (
         <div className="absolute inset-0">
