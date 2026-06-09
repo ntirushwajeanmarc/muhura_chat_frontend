@@ -23,7 +23,6 @@ import CopyButton from '../components/CopyButton';
 import EditButton from '../components/EditButton';
 import MessageReceipt from '../components/MessageReceipt';
 import { indexReadStates, getMessageReceiptStatus } from '../utils/readReceipts';
-import EmojiPicker from '../components/EmojiPicker';
 import ReplyButton, { truncateReply } from '../components/ReplyButton';
 import UserSearchModal from '../components/UserSearchModal';
 import CreateGroupModal from '../components/CreateGroupModal';
@@ -54,12 +53,10 @@ import ViewStarsModal from '../components/ViewStarsModal';
 import GroupProfileModal from '../components/GroupProfileModal';
 import ConnectionBanner from '../components/ConnectionBanner';
 import CallMessageBubble from '../components/CallMessageBubble';
-import GifPicker from '../components/GifPicker';
-import IconBtn, { composerBtn } from '../components/IconBtn';
+import ComposerPlusMenu from '../components/ComposerPlusMenu';
 import RoomTypeIcon from '../components/RoomTypeIcon';
 import { sendGif } from '../api/gifs';
 import {
-  Paperclip,
   Send,
   Menu,
   ChevronLeft,
@@ -2079,21 +2076,15 @@ export default function ChatPage() {
                 onChange={handleFileSelect}
               />
               <div className="flex-1 min-w-0 flex items-end gap-1 bg-wa-surface border border-wa-border rounded-xl px-1.5 py-1 focus-within:border-wa-accent transition-colors">
-                <IconBtn
-                  icon={Paperclip}
-                  className={`${composerBtn} w-9 h-9 shrink-0`}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!activeRoom || uploading}
-                  title="Attach file"
-                  aria-label="Attach file"
-                  size={18}
-                />
-                <GifPicker
-                  onSelect={handleGifSelect}
+                <ComposerPlusMenu
+                  compact
                   disabled={!activeRoom}
-                  sending={sendingGif}
+                  uploading={uploading}
+                  sendingGif={sendingGif}
+                  onAttach={() => fileInputRef.current?.click()}
+                  onEmojiSelect={insertEmoji}
+                  onGifSelect={handleGifSelect}
                 />
-                <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
                 <textarea
                   ref={inputRef}
                   className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm py-1.5 min-h-8 max-h-32 resize-none placeholder:text-wa-muted"
@@ -2160,21 +2151,14 @@ export default function ChatPage() {
                 onChange={handleFileSelect}
               />
               <div className="flex-1 min-w-0 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors">
-                <IconBtn
-                  icon={Paperclip}
-                  className={`${composerBtn} w-10 h-10 shrink-0`}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!activeRoom || uploading}
-                  title="Attach file"
-                  aria-label="Attach file"
-                  size={20}
-                />
-                <GifPicker
-                  onSelect={handleGifSelect}
+                <ComposerPlusMenu
                   disabled={!activeRoom}
-                  sending={sendingGif}
+                  uploading={uploading}
+                  sendingGif={sendingGif}
+                  onAttach={() => fileInputRef.current?.click()}
+                  onEmojiSelect={insertEmoji}
+                  onGifSelect={handleGifSelect}
                 />
-                <EmojiPicker onSelect={insertEmoji} disabled={!activeRoom} />
                 <textarea
                   ref={inputRef}
                   className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm py-2 min-h-9 max-h-40 resize-none placeholder:text-wa-muted"
