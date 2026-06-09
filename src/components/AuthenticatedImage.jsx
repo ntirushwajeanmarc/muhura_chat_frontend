@@ -2,7 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fetchAuthenticatedBlob } from '../utils/fileDownload';
 
-export default function AuthenticatedImage({ storedPath, alt, className, style, fallback }) {
+export default function AuthenticatedImage({
+  storedPath,
+  alt,
+  className,
+  style,
+  fallback,
+  allowExpand = true,
+  loadingClassName,
+}) {
   const { token, loading: authLoading } = useAuth();
   const [blobUrl, setBlobUrl] = useState(null);
   const [error, setError] = useState(false);
@@ -63,10 +71,11 @@ export default function AuthenticatedImage({ storedPath, alt, className, style, 
 
   if (loading || !blobUrl) {
     return (
-      <div
-        className={`animate-pulse bg-wa-surface rounded-md min-h-[120px] min-w-[160px] ${className || ''}`}
-        style={style}
-      />
+      <div className={loadingClassName || `animate-pulse bg-wa-surface rounded-md min-h-[120px] min-w-[160px] ${className || ''}`} style={style}>
+        {loadingClassName?.includes('justify-center') && (
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        )}
+      </div>
     );
   }
 
@@ -74,9 +83,10 @@ export default function AuthenticatedImage({ storedPath, alt, className, style, 
     <img
       src={blobUrl}
       alt={alt}
-      className={`cursor-pointer ${className || ''}`}
+      className={`${allowExpand ? 'cursor-pointer' : ''} ${className || ''}`}
       style={style}
-      onClick={() => window.open(blobUrl, '_blank', 'noopener,noreferrer')}
+      onClick={allowExpand ? () => window.open(blobUrl, '_blank', 'noopener,noreferrer') : undefined}
+      draggable={false}
     />
   );
 }

@@ -1256,7 +1256,10 @@ export default function ChatPage() {
             feed={starsFeed}
             viewerId={user?.id}
             onCreate={() => setShowCreateStar(true)}
-            onViewUser={setViewingStars}
+            onViewUser={(item) => {
+              setProfileUserId(null);
+              setViewingStars(item);
+            }}
           />
         )}
 

@@ -7,8 +7,10 @@ export default function Avatar({ username, color, avatarUrl, size = 36, classNam
       <AuthenticatedImage
         storedPath={avatarUrl}
         alt={username || 'User'}
-        className={`rounded-full object-cover shrink-0 ${className}`}
+        allowExpand={false}
+        className={`rounded-full object-cover shrink-0 pointer-events-none ${className}`}
         style={{ width: size, height: size }}
+        loadingClassName={`animate-pulse bg-wa-surface rounded-full shrink-0 ${className}`}
         fallback={
           <div
             className={`rounded-full flex items-center justify-center text-white font-bold shrink-0 ${className}`}
