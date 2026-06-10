@@ -2,7 +2,11 @@ import axios from 'axios';
 import { BACKEND_URL } from '../config';
 
 export async function requestPasswordReset(email) {
-  const res = await axios.post(`${BACKEND_URL}/api/auth/forgot-password`, { email });
+  const res = await axios.post(
+    `${BACKEND_URL}/api/auth/forgot-password`,
+    { email: String(email || '').trim().toLowerCase() },
+    { timeout: 20_000 }
+  );
   return res.data;
 }
 

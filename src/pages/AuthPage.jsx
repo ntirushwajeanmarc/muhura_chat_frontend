@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { requestPasswordReset } from '../api/auth';
+
+const FORGOT_COOLDOWN_SEC = 60;
 
 const inputClass =
   'w-full px-3.5 py-2.5 bg-wa-surface border border-wa-border rounded-lg text-slate-100 text-sm outline-none focus:border-wa-accent transition-colors';
@@ -12,12 +14,18 @@ export default function AuthPage({ initialMode = 'login' }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotCooldown, setForgotCooldown] = useState(0);
+  const forgotSubmittingRef = useRef(false);
   const { login, register } = useAuth();
 
   const switchMode = (next) => {
     setMode(next);
     setError('');
     setInfo('');
+    setForgotSent(false);
+    setForgotCooldown(0);
+    forgotSubmittingRef.current = false;
   };
 
   const handle = async (e) => {
@@ -38,18 +46,51 @@ export default function AuthPage({ initialMode = 'login' }) {
     }
   };
 
+  const startForgotCooldown = () => {
+    setForgotCooldown(FORGOT_COOLDOWN_SEC);
+    const timer = setInterval(() => {
+      setForgotCooldown((sec) => {
+        if (sec <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return sec - 1;
+      });
+    }, 1000);
+  };
+
   const handleForgot = async (e) => {
     e.preventDefault();
+    if (forgotSubmittingRef.current || forgotCooldown > 0) return;
+
+    const email = (forgotEmail || form.email || '').trim();
+    if (!email) {
+      setError('Email is required');
+      return;
+    }
+
+    forgotSubmittingRef.current = true;
     setError('');
     setInfo('');
     setLoading(true);
     try {
-      const data = await requestPasswordReset(forgotEmail || form.email);
-      setInfo(data.message || 'If an account exists for that email, we sent a password reset link.');
+      const data = await requestPasswordReset(email);
+      setForgotSent(true);
+      setInfo(
+        data.message
+          || 'If an account exists for that email, we sent a password reset link. Check your inbox and spam folder.'
+      );
+      startForgotCooldown();
     } catch (err) {
-      setError(err.response?.data?.error || 'Could not send reset email');
+      const isTimeout = err.code === 'ECONNABORTED';
+      setError(
+        isTimeout
+          ? 'The server took too long to respond. Please wait a minute before trying again.'
+          : err.response?.data?.error || 'Could not send reset email'
+      );
     } finally {
       setLoading(false);
+      forgotSubmittingRef.current = false;
     }
   };
 
@@ -75,10 +116,14 @@ export default function AuthPage({ initialMode = 'login' }) {
                   placeholder="you@example.com"
                   className={inputClass}
                   value={forgotEmail || form.email}
-                  onChange={(e) => setForgotEmail(e.target.value)}
+                  onChange={(e) => {
+                    setForgotEmail(e.target.value);
+                    if (forgotSent) setForgotSent(false);
+                  }}
                   required
                   autoComplete="email"
                   autoFocus
+                  disabled={loading || forgotCooldown > 0}
                 />
               </div>
               {error && (
@@ -93,10 +138,16 @@ export default function AuthPage({ initialMode = 'login' }) {
               )}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || forgotCooldown > 0}
                 className="py-3 bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-60 rounded-lg text-white font-semibold text-sm transition-colors"
               >
-                {loading ? 'Sending…' : 'Send reset link'}
+                {loading
+                  ? 'Sending…'
+                  : forgotCooldown > 0
+                    ? `Resend in ${forgotCooldown}s`
+                    : forgotSent
+                      ? 'Send again'
+                      : 'Send reset link'}
               </button>
               <button
                 type="button"
