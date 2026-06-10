@@ -4,6 +4,7 @@ import { fetchUserProfile, toggleProfileLike } from '../api/likes';
 import { toggleFollow } from '../api/social';
 import { Phone, Video, Heart, Smartphone } from 'lucide-react';
 import Avatar from './Avatar';
+import ImageLightbox from './ImageLightbox';
 import FollowListModal from './FollowListModal';
 import ModalCloseBtn from './ModalCloseBtn';
 
@@ -15,8 +16,13 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall, o
   const [followBusy, setFollowBusy] = useState(false);
   const [error, setError] = useState('');
   const [followList, setFollowList] = useState(null);
+  const [avatarExpanded, setAvatarExpanded] = useState(false);
 
   const isOwn = user?.id === userId;
+
+  useEffect(() => {
+    setAvatarExpanded(false);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -78,6 +84,13 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall, o
 
   return (
     <>
+    {avatarExpanded && profile?.avatar_url && (
+      <ImageLightbox
+        storedPath={profile.avatar_url}
+        alt={displayName || profile.username}
+        onClose={() => setAvatarExpanded(false)}
+      />
+    )}
     {followList && (
       <FollowListModal
         userId={userId}
@@ -112,6 +125,7 @@ export default function ProfileModal({ userId, onClose, onEditProfile, onCall, o
                 color={profile.avatar_color}
                 avatarUrl={profile.avatar_url}
                 size={96}
+                onPhotoClick={profile.avatar_url ? () => setAvatarExpanded(true) : undefined}
               />
               <div className="text-center">
                 <h3 className="text-xl font-bold">{displayName}</h3>
