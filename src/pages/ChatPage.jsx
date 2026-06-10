@@ -1308,7 +1308,9 @@ export default function ChatPage() {
         key={room.id}
         type="button"
         className={`flex items-center gap-3 w-full p-2.5 rounded-xl text-left transition-colors ${
-          activeRoom?.id === room.id ? 'bg-wa-accent/15 ring-1 ring-wa-accent/30' : 'hover:bg-wa-surface/70'
+          activeRoom?.id === room.id
+            ? 'bg-wa-accent/25 backdrop-blur-sm ring-1 ring-wa-accent/30'
+            : 'hover:bg-wa-surface/90 backdrop-blur-sm'
         }`}
         onClick={() => selectRoom(room)}
       >
@@ -1490,7 +1492,7 @@ export default function ChatPage() {
       />
 
       <aside
-        className={`flex flex-col bg-wa-dark border-r border-wa-border transition-all duration-200 ${
+        className={`flex flex-col sidebar-background border-r border-wa-border transition-all duration-200 ${
           isMobile
             ? showSidebar
               ? 'fixed inset-0 z-30 w-full min-w-0'
@@ -1501,7 +1503,7 @@ export default function ChatPage() {
         }`}
       >
         <div
-          className={`flex items-center h-14 sm:h-[60px] border-b border-wa-border shrink-0 ${
+          className={`flex items-center h-14 sm:h-[60px] border-b border-wa-border/80 bg-wa-dark/25 backdrop-blur-md shrink-0 ${
             sidebarOpen || isMobile ? 'gap-2 px-3' : 'justify-center px-1'
           }`}
         >
@@ -1749,7 +1751,7 @@ export default function ChatPage() {
         )}
 
         <div
-          className={`flex items-center border-t border-wa-border shrink-0 ${
+          className={`flex items-center border-t border-wa-border/80 bg-wa-dark/25 backdrop-blur-md shrink-0 ${
             sidebarOpen ? 'gap-2.5 p-3' : 'flex-col gap-2 py-3'
           }`}
         >
