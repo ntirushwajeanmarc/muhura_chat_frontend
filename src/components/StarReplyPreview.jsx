@@ -2,6 +2,7 @@ import React from 'react';
 import { Star } from 'lucide-react';
 import AuthenticatedImage from './AuthenticatedImage';
 import { truncateReply } from './ReplyButton';
+import StarTextBackground from './StarTextBackground';
 
 export default function StarReplyPreview({ starReply, className = '' }) {
   if (!starReply) return null;
@@ -25,9 +26,12 @@ export default function StarReplyPreview({ starReply, className = '' }) {
           />
         </div>
       ) : (
-        <div className="w-10 h-10 rounded-md shrink-0 bg-amber-500/20 flex items-center justify-center">
-          <Star size={16} className="text-amber-400" aria-hidden />
-        </div>
+        <StarTextBackground
+          backgroundId={starReply.background_color}
+          className="w-10 h-10 rounded-md shrink-0 overflow-hidden flex items-center justify-center"
+        >
+          <Star size={14} className="opacity-90" aria-hidden />
+        </StarTextBackground>
       )}
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-semibold text-amber-300/95 flex items-center gap-1">

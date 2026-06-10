@@ -5,6 +5,7 @@ import AuthenticatedImage from './AuthenticatedImage';
 import Avatar from './Avatar';
 import { markStarsSeen } from '../utils/starSeen';
 import MessageContent from './MessageContent';
+import StarTextBackground from './StarTextBackground';
 
 const SLIDE_MS = 6000;
 
@@ -111,15 +112,18 @@ export default function ViewStarsModal({ feedItem, viewerId, onClose, onDelete, 
               }
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center p-8">
+            <StarTextBackground
+              backgroundId={current.background_color}
+              className="w-full h-full flex items-center justify-center p-8 sm:p-12"
+            >
               {current.content ? (
-                <div className="text-white text-center text-xl leading-relaxed max-w-md">
+                <div className="text-center text-xl sm:text-2xl leading-relaxed max-w-md font-medium">
                   <MessageContent content={current.content} />
                 </div>
               ) : (
-                <p className="text-white/50">Empty star</p>
+                <p className="opacity-60">Empty star</p>
               )}
-            </div>
+            </StarTextBackground>
           )}
         </div>
 

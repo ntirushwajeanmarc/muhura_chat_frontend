@@ -11,10 +11,11 @@ export async function fetchUserStars(userId) {
   return res.data;
 }
 
-export async function postStar({ content, image }, onProgress) {
+export async function postStar({ content, image, backgroundColor }, onProgress) {
   const form = new FormData();
   if (content) form.append('content', content);
   if (image) form.append('image', image);
+  if (backgroundColor) form.append('background_color', backgroundColor);
   const res = await axios.post(`${BACKEND_URL}/api/social/stars`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (event) => {

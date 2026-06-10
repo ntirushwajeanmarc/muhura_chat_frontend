@@ -3,9 +3,12 @@ import { Star, X } from 'lucide-react';
 import { postStar } from '../api/social';
 import CircularProgress from './CircularProgress';
 import ModalCloseBtn from './ModalCloseBtn';
+import StarTextBackground from './StarTextBackground';
+import { DEFAULT_STAR_BACKGROUND, STAR_BACKGROUNDS } from '../utils/starBackgrounds';
 
 export default function CreateStarModal({ onPosted, onClose }) {
   const [content, setContent] = useState('');
+  const [backgroundId, setBackgroundId] = useState(DEFAULT_STAR_BACKGROUND);
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -13,12 +16,20 @@ export default function CreateStarModal({ onPosted, onClose }) {
   const [error, setError] = useState('');
   const fileRef = useRef(null);
 
+  const isTextOnly = !image;
+
   const handleImage = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (preview) URL.revokeObjectURL(preview);
     setImage(file);
     setPreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+    setImage(null);
   };
 
   const handleSubmit = async (e) => {
@@ -31,7 +42,11 @@ export default function CreateStarModal({ onPosted, onClose }) {
     setError('');
     try {
       const data = await postStar(
-        { content: content.trim(), image },
+        {
+          content: content.trim(),
+          image,
+          backgroundColor: isTextOnly && content.trim() ? backgroundId : undefined,
+        },
         setProgress
       );
       onPosted?.(data.star);
@@ -47,7 +62,7 @@ export default function CreateStarModal({ onPosted, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5" onClick={onClose}>
       <form
-        className="bg-wa-panel border border-wa-border rounded-xl w-full max-w-md shadow-2xl"
+        className="bg-wa-panel border border-wa-border rounded-xl w-full max-w-md shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
       >
@@ -64,14 +79,67 @@ export default function CreateStarModal({ onPosted, onClose }) {
             Share a star with your followers. Stars disappear after 24 hours.
           </p>
 
-          <textarea
-            className="w-full min-h-[100px] px-3.5 py-2.5 bg-wa-surface border border-wa-border rounded-lg text-sm text-slate-100 resize-y outline-none focus:border-wa-accent"
-            placeholder="Write something…"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            maxLength={500}
-            disabled={uploading}
-          />
+          {preview ? (
+            <div className="relative rounded-xl overflow-hidden border border-wa-border">
+              <img src={preview} alt="" className="w-full max-h-56 object-cover" />
+              <button
+                type="button"
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white inline-flex items-center justify-center"
+                onClick={clearImage}
+                aria-label="Remove image"
+              >
+                <X size={16} strokeWidth={1.75} aria-hidden />
+              </button>
+              <textarea
+                className="w-full min-h-[72px] px-4 py-3 bg-black/50 border-t border-white/10 text-sm text-white resize-none outline-none placeholder:text-white/50"
+                placeholder="Add a caption…"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                maxLength={500}
+                disabled={uploading}
+              />
+            </div>
+          ) : (
+            <StarTextBackground
+              backgroundId={backgroundId}
+              className="relative rounded-xl overflow-hidden min-h-[220px] flex items-center justify-center border border-white/10"
+            >
+              <textarea
+                className="w-full min-h-[220px] px-6 py-8 bg-transparent text-center text-lg leading-relaxed font-medium resize-none outline-none placeholder:text-white/60"
+                placeholder="Type your star…"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                maxLength={500}
+                disabled={uploading}
+              />
+            </StarTextBackground>
+          )}
+
+          {isTextOnly && (
+            <div>
+              <p className="text-[11px] font-semibold text-wa-muted tracking-wide uppercase mb-2">
+                Background
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin" role="listbox" aria-label="Star background color">
+                {STAR_BACKGROUNDS.map((bg) => (
+                  <button
+                    key={bg.id}
+                    type="button"
+                    role="option"
+                    aria-selected={backgroundId === bg.id}
+                    title={bg.id}
+                    onClick={() => setBackgroundId(bg.id)}
+                    className={`shrink-0 w-9 h-9 rounded-full border-2 transition-transform ${
+                      backgroundId === bg.id
+                        ? 'border-white scale-110 shadow-lg'
+                        : 'border-transparent hover:scale-105'
+                    }`}
+                    style={{ background: bg.background }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           <input
             ref={fileRef}
@@ -81,30 +149,14 @@ export default function CreateStarModal({ onPosted, onClose }) {
             onChange={handleImage}
           />
 
-          {preview ? (
-            <div className="relative rounded-lg overflow-hidden border border-wa-border">
-              <img src={preview} alt="" className="w-full max-h-48 object-cover" />
-              <button
-                type="button"
-                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white inline-flex items-center justify-center"
-                onClick={() => {
-                  URL.revokeObjectURL(preview);
-                  setPreview(null);
-                  setImage(null);
-                }}
-                aria-label="Remove image"
-              >
-                <X size={16} strokeWidth={1.75} aria-hidden />
-              </button>
-            </div>
-          ) : (
+          {!preview && (
             <button
               type="button"
               className="w-full py-3 border border-dashed border-wa-border rounded-lg text-sm text-wa-muted hover:text-slate-200 hover:border-wa-accent"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
             >
-              📷 Add image
+              Add photo instead
             </button>
           )}
 
