@@ -322,45 +322,6 @@ export default function ChatPage() {
     }
   }, []);
 
-  const resyncAfterReconnect = useCallback(() => {
-    const roomIds = allRoomsRef.current.map((r) => r.id).filter(Boolean);
-    if (roomIds.length) joinRooms(roomIds);
-    syncPresence();
-    loadUnreadCounts();
-    syncActiveRoomMessages();
-  }, [joinRooms, syncPresence, loadUnreadCounts, syncActiveRoomMessages]);
-
-  useEffect(() => {
-    if (!connected) return;
-    if (!hadSocketConnectionRef.current) {
-      hadSocketConnectionRef.current = true;
-      return;
-    }
-    resyncAfterReconnect();
-  }, [connected, resyncAfterReconnect]);
-
-  useEffect(() => onReconnect(resyncAfterReconnect), [onReconnect, resyncAfterReconnect]);
-
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return;
-      wake();
-      syncPresence();
-      loadUnreadCounts();
-      syncActiveRoomMessages();
-    };
-    const onPageShow = () => onVisible();
-
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('pageshow', onPageShow);
-    window.addEventListener('online', onVisible);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('pageshow', onPageShow);
-      window.removeEventListener('online', onVisible);
-    };
-  }, [wake, syncPresence, loadUnreadCounts, syncActiveRoomMessages]);
-
   const totalUnread = Object.values(unread).reduce((sum, n) => sum + n, 0);
 
   const sortByUnreadThenRecent = useCallback((rooms) => {
@@ -455,12 +416,6 @@ export default function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
-  const mergeMessages = useCallback((existing, incoming) => {
-    const seen = new Set(existing.map((m) => m.id));
-    const unique = incoming.filter((m) => !seen.has(m.id));
-    return [...existing, ...unique];
-  }, []);
-
   const loadInitialMessages = useCallback(async (roomId) => {
     try {
       const { messages: data, hasMore } = await fetchRoomMessages(roomId);
@@ -498,6 +453,45 @@ export default function ChatPage() {
       /* keep existing messages */
     }
   }, [scrollToBottom]);
+
+  const resyncAfterReconnect = useCallback(() => {
+    const roomIds = allRoomsRef.current.map((r) => r.id).filter(Boolean);
+    if (roomIds.length) joinRooms(roomIds);
+    syncPresence();
+    loadUnreadCounts();
+    syncActiveRoomMessages();
+  }, [joinRooms, syncPresence, loadUnreadCounts, syncActiveRoomMessages]);
+
+  useEffect(() => {
+    if (!connected) return;
+    if (!hadSocketConnectionRef.current) {
+      hadSocketConnectionRef.current = true;
+      return;
+    }
+    resyncAfterReconnect();
+  }, [connected, resyncAfterReconnect]);
+
+  useEffect(() => onReconnect(resyncAfterReconnect), [onReconnect, resyncAfterReconnect]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      wake();
+      syncPresence();
+      loadUnreadCounts();
+      syncActiveRoomMessages();
+    };
+    const onPageShow = () => onVisible();
+
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('online', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('online', onVisible);
+    };
+  }, [wake, syncPresence, loadUnreadCounts, syncActiveRoomMessages]);
 
   const fetchReadState = useCallback(async (roomId) => {
     if (!roomId) return;
@@ -549,7 +543,7 @@ export default function ChatPage() {
       loadingOlderRef.current = false;
       setLoadingOlder(false);
     }
-  }, [activeRoom, hasMoreOlder, messages, mergeMessages]);
+  }, [activeRoom, hasMoreOlder, messages]);
 
   const refreshChats = useCallback(async () => {
     const { direct, groups } = await fetchChats();
