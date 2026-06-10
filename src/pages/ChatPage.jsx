@@ -1066,20 +1066,34 @@ export default function ChatPage() {
     setShowNewGroup(false);
   };
 
+  const isGroupAdmin = useCallback((room) => room?.type === 'group' && room?.my_role === 'admin', []);
+
+  const patchGroupRoom = useCallback((roomId, patch) => {
+    setGroupChats((prev) => prev.map((r) => (r.id === roomId ? { ...r, ...patch } : r)));
+    setActiveRoom((prev) => (prev?.id === roomId ? { ...prev, ...patch } : prev));
+  }, []);
+
   const handleAddGroupMembers = async (selectedUsers) => {
     if (!activeRoom?.id) return;
     const memberIds = selectedUsers.map((u) => u.id);
-    const result = await addGroupMembers(activeRoom.id, memberIds);
-    setGroupChats((prev) =>
-      prev.map((r) =>
-        r.id === activeRoom.id ? { ...r, member_count: result.member_count } : r
-      )
-    );
-    setActiveRoom((prev) =>
-      prev?.id === activeRoom.id ? { ...prev, member_count: result.member_count } : prev
-    );
-    setShowAddMembers(false);
+    try {
+      const result = await addGroupMembers(activeRoom.id, memberIds);
+      patchGroupRoom(activeRoom.id, { member_count: result.member_count });
+      setShowAddMembers(false);
+      toast('Members added', 'success');
+    } catch (err) {
+      toast(err.response?.data?.error || 'Could not add members', 'error');
+    }
   };
+
+  const handleGroupAvatarUpdated = useCallback((data) => {
+    if (!data?.id) return;
+    patchGroupRoom(data.id, {
+      avatar_url: data.avatar_url,
+      avatar_color: data.avatar_color,
+    });
+    toast('Group photo updated', 'success');
+  }, [patchGroupRoom, toast]);
 
   const handleChannelJoin = (room) => {
     setPublicRooms((prev) => {
@@ -1097,6 +1111,10 @@ export default function ChatPage() {
 
   const openAddMembers = async () => {
     if (!activeRoom?.id) return;
+    if (!isGroupAdmin(activeRoom)) {
+      toast('Only group admins can add members', 'error');
+      return;
+    }
     try {
       const members = await fetchGroupMembers(activeRoom.id);
       setGroupMemberIds(members.map((m) => m.id));
@@ -1266,10 +1284,19 @@ export default function ChatPage() {
     </div>
   );
 
+  const renderGroupAvatar = (room, size) => (
+    <Avatar
+      username={roomLabel(room)}
+      color={room.avatar_color || '#00a884'}
+      avatarUrl={room.avatar_url}
+      size={size}
+    />
+  );
+
   const renderChatItem = (room, compact = false) => {
     const label = roomLabel(room);
-    const avatarColor = room.type === 'direct' ? room.peer?.avatar_color : null;
-    const avatarUrl = room.type === 'direct' ? room.peer?.avatar_url : null;
+    const avatarColor = room.type === 'direct' ? room.peer?.avatar_color : room.avatar_color;
+    const avatarUrl = room.type === 'direct' ? room.peer?.avatar_url : room.avatar_url;
     const avatarName = room.type === 'direct' ? room.peer?.username : label;
     const peerId = room.type === 'direct' ? room.peer?.id : null;
     const unreadCount = unread[room.id] || 0;
@@ -1288,6 +1315,8 @@ export default function ChatPage() {
         >
           {room.type === 'direct' ? (
             avatarWithPresence(avatarName, avatarColor, avatarUrl, 36, peerId)
+          ) : room.type === 'group' ? (
+            renderGroupAvatar(room, 36)
           ) : (
             <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center">
               <RoomTypeIcon room={room} size={18} />
@@ -1316,6 +1345,8 @@ export default function ChatPage() {
       >
         {room.type === 'direct' ? (
           avatarWithPresence(avatarName, avatarColor, avatarUrl, 40, peerId)
+        ) : room.type === 'group' ? (
+          <span className="shrink-0">{renderGroupAvatar(room, 40)}</span>
         ) : (
           <span className="w-10 h-10 rounded-full bg-wa-surface flex items-center justify-center shrink-0">
             <RoomTypeIcon room={room} size={20} />
@@ -1452,8 +1483,10 @@ export default function ChatPage() {
       {showGroupProfile && activeRoom?.type === 'group' && (
         <GroupProfileModal
           room={activeRoom}
+          isAdmin={isGroupAdmin(activeRoom)}
           onClose={() => setShowGroupProfile(false)}
           onAddMembers={openAddMembers}
+          onAvatarUpdated={handleGroupAvatarUpdated}
           onViewProfile={(id) => {
             setShowGroupProfile(false);
             setProfileUserId(id);
@@ -1845,9 +1878,7 @@ export default function ChatPage() {
             >
               {activeRoom.type === 'direct' && headerAvatar}
               {activeRoom.type === 'group' && (
-                <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center shrink-0">
-                  <Users size={18} strokeWidth={1.75} className="text-wa-muted" aria-hidden />
-                </span>
+                <span className="shrink-0">{renderGroupAvatar(activeRoom, 36)}</span>
               )}
               {activeRoom.type === 'public' && (
                 <span className="w-9 h-9 rounded-full bg-wa-surface flex items-center justify-center shrink-0">
@@ -1887,7 +1918,7 @@ export default function ChatPage() {
               onVideoCall={activeRoom.type === 'direct' && activeRoom.peer ? () => handleStartCall('video') : null}
               onToggleSearch={() => setShowMessageSearch((v) => !v)}
               onWallpaper={() => setShowWallpaper(true)}
-              onAddMembers={activeRoom.type === 'group' ? openAddMembers : null}
+              onAddMembers={activeRoom.type === 'group' && isGroupAdmin(activeRoom) ? openAddMembers : null}
             />
           )}
         </header>

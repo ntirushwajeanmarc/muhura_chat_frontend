@@ -36,6 +36,23 @@ export async function addGroupMembers(roomId, memberIds) {
   return res.data;
 }
 
+export async function uploadGroupAvatar(roomId, file, onProgress) {
+  const form = new FormData();
+  form.append('photo', file);
+  const res = await axios.post(`${BACKEND_URL}/api/chats/groups/${roomId}/avatar`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (event) => {
+      if (!onProgress) return;
+      const total = event.total || file.size || 0;
+      const percent = total > 0
+        ? Math.round((event.loaded * 100) / total)
+        : Math.min(95, Math.round(event.loaded / 5000));
+      onProgress(Math.min(percent, 99));
+    },
+  });
+  return res.data;
+}
+
 export async function searchChannels(query) {
   const res = await axios.get(`${BACKEND_URL}/api/rooms/search`, { params: { q: query } });
   return res.data;

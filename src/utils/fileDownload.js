@@ -37,7 +37,9 @@ export async function fetchAuthenticatedBlob(storedPath, { download = false, ski
   if (!storedPath) throw new Error('Missing file path');
 
   const isCacheableImage = !download && (
-    isImagePath(storedPath) || storedPath.startsWith('/avatars/user/')
+    isImagePath(storedPath)
+    || storedPath.startsWith('/avatars/user/')
+    || storedPath.startsWith('/avatars/group/')
   );
 
   if (!skipCache && isCacheableImage && imageBlobCache.has(storedPath)) {
