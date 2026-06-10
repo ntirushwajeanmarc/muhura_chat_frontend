@@ -67,6 +67,11 @@ export function messagePreview(msg, viewerId = null) {
     }
     return `📞 ${kind}`;
   }
+  if (msg.star_reply) {
+    const text = (msg.content || '').trim();
+    const preview = text.length > 60 ? `${text.slice(0, 60)}…` : text;
+    return preview ? `⭐ Reply to star: ${preview}` : '⭐ Reply to star';
+  }
   if (msg.attachment) {
     const isGif = msg.attachment.mime === 'image/gif'
       || /\.gif$/i.test(msg.attachment.url || msg.attachment.name || '');

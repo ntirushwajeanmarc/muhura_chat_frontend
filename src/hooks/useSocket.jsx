@@ -92,9 +92,9 @@ export const useSocket = (token) => {
     socketRef.current?.emit('presence_sync');
   }, []);
 
-  const sendMessage = useCallback((roomId, content, replyToId = null) => {
+  const sendMessage = useCallback((roomId, content, replyToId = null, starReplyId = null) => {
     if (!socketRef.current?.connected) return false;
-    socketRef.current.emit('send_message', { roomId, content, replyToId });
+    socketRef.current.emit('send_message', { roomId, content, replyToId, starReplyId });
     return true;
   }, []);
 

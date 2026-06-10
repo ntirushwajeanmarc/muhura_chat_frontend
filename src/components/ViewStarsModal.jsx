@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Send } from 'lucide-react';
 import ModalCloseBtn from './ModalCloseBtn';
 import AuthenticatedImage from './AuthenticatedImage';
 import Avatar from './Avatar';
@@ -7,39 +8,47 @@ import MessageContent from './MessageContent';
 
 const SLIDE_MS = 6000;
 
-export default function ViewStarsModal({ feedItem, viewerId, onClose, onDelete }) {
+export default function ViewStarsModal({ feedItem, viewerId, onClose, onDelete, onReply }) {
   const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [replyText, setReplyText] = useState('');
+  const [replying, setReplying] = useState(false);
+  const [replyPaused, setReplyPaused] = useState(false);
   const timerRef = useRef(null);
   const startRef = useRef(Date.now());
+  const inputRef = useRef(null);
 
   const stars = feedItem?.stars || [];
   const current = stars[index];
   const isOwn = feedItem?.is_me;
+  const canReply = !isOwn && typeof onReply === 'function';
 
   const goNext = useCallback(() => {
+    if (replyPaused) return;
     if (index < stars.length - 1) {
       setIndex((i) => i + 1);
       setProgress(0);
       startRef.current = Date.now();
+      setReplyText('');
     } else {
       if (viewerId && stars.length) {
         markStarsSeen(viewerId, stars.map((s) => s.id));
       }
       onClose();
     }
-  }, [index, stars, viewerId, onClose]);
+  }, [index, stars, viewerId, onClose, replyPaused]);
 
   const goPrev = useCallback(() => {
     if (index > 0) {
       setIndex((i) => i - 1);
       setProgress(0);
       startRef.current = Date.now();
+      setReplyText('');
     }
   }, [index]);
 
   useEffect(() => {
-    if (!current) return undefined;
+    if (!current || replyPaused) return undefined;
     startRef.current = Date.now();
     setProgress(0);
 
@@ -52,7 +61,7 @@ export default function ViewStarsModal({ feedItem, viewerId, onClose, onDelete }
 
     timerRef.current = setInterval(tick, 50);
     return () => clearInterval(timerRef.current);
-  }, [current, index, goNext]);
+  }, [current, index, goNext, replyPaused]);
 
   useEffect(() => {
     return () => {
@@ -61,6 +70,20 @@ export default function ViewStarsModal({ feedItem, viewerId, onClose, onDelete }
       }
     };
   }, [viewerId, stars]);
+
+  const handleReplySubmit = async (e) => {
+    e.preventDefault();
+    const text = replyText.trim();
+    if (!text || !current || replying) return;
+
+    setReplying(true);
+    try {
+      await onReply({ feedItem, star: current, text });
+      setReplyText('');
+    } finally {
+      setReplying(false);
+    }
+  };
 
   if (!feedItem || !current) return null;
 
@@ -101,7 +124,7 @@ export default function ViewStarsModal({ feedItem, viewerId, onClose, onDelete }
         </div>
 
         {current.content && current.image_url && (
-          <div className="absolute bottom-0 left-0 right-0 z-20 px-6 pb-8 pt-16 bg-gradient-to-t from-black/85 via-black/50 to-transparent">
+          <div className="absolute bottom-0 left-0 right-0 z-20 px-6 pb-28 pt-16 bg-gradient-to-t from-black/85 via-black/50 to-transparent pointer-events-none">
             <div className="text-white text-center text-lg leading-relaxed max-w-md mx-auto">
               <MessageContent content={current.content} />
             </div>
@@ -155,6 +178,38 @@ export default function ViewStarsModal({ feedItem, viewerId, onClose, onDelete }
           </div>
         </div>
       </div>
+
+      {canReply && (
+        <form
+          onSubmit={handleReplySubmit}
+          className="shrink-0 z-50 px-3 py-3 border-t border-white/10 bg-black/90 pb-safe"
+        >
+          <div className="flex items-center gap-2 max-w-lg mx-auto">
+            <input
+              ref={inputRef}
+              type="text"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              onFocus={() => setReplyPaused(true)}
+              onBlur={() => {
+                if (!replyText.trim()) setReplyPaused(false);
+              }}
+              placeholder={`Reply to ${feedItem.user?.username}…`}
+              className="flex-1 min-w-0 px-4 py-2.5 rounded-full bg-white/10 border border-white/15 text-white text-sm placeholder:text-white/45 outline-none focus:border-wa-accent/60"
+              disabled={replying}
+              maxLength={1000}
+            />
+            <button
+              type="submit"
+              disabled={!replyText.trim() || replying}
+              className="w-10 h-10 rounded-full bg-wa-accent hover:bg-wa-accent-hover disabled:opacity-40 text-white inline-flex items-center justify-center shrink-0"
+              aria-label="Send reply"
+            >
+              <Send size={18} strokeWidth={1.75} aria-hidden />
+            </button>
+          </div>
+        </form>
+      )}
 
       {isOwn && (
         <div className="shrink-0 p-4 flex justify-center border-t border-white/10 bg-black">

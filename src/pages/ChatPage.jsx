@@ -50,6 +50,7 @@ import { fetchStarsFeed, deleteStar } from '../api/social';
 import StarsBar from '../components/StarsBar';
 import CreateStarModal from '../components/CreateStarModal';
 import ViewStarsModal from '../components/ViewStarsModal';
+import StarReplyPreview from '../components/StarReplyPreview';
 import GroupProfileModal from '../components/GroupProfileModal';
 import ConnectionBanner from '../components/ConnectionBanner';
 import CallMessageBubble from '../components/CallMessageBubble';
@@ -1143,6 +1144,45 @@ export default function ChatPage() {
     }
   };
 
+  const handleReplyToStar = async ({ feedItem, star, text }) => {
+    const ownerId = feedItem?.user?.id;
+    if (!ownerId || feedItem?.is_me || !star?.id || !text?.trim()) return;
+
+    if (!connected) {
+      toast('Connect to the internet to reply to a star', 'error');
+      return;
+    }
+
+    try {
+      const room = await startDirectChat(ownerId);
+      if (!room?.id) throw new Error('Could not open chat');
+
+      const chatRoom = { ...room, type: 'direct' };
+      setDirectChats((prev) => {
+        const exists = prev.find((r) => r.id === chatRoom.id);
+        if (exists) {
+          return prev.map((r) => (r.id === chatRoom.id ? { ...r, ...chatRoom } : r));
+        }
+        return [chatRoom, ...prev];
+      });
+      joinRoom(chatRoom.id);
+
+      const sent = sendMessage(chatRoom.id, text.trim(), null, star.id);
+      if (!sent) {
+        toast('Could not send reply — try again', 'error');
+        return;
+      }
+
+      setViewingStars(null);
+      selectRoom(chatRoom);
+      stickToBottomRef.current = true;
+      requestAnimationFrame(() => scrollToBottom('smooth'));
+    } catch (err) {
+      toast(err.response?.data?.error || 'Could not send star reply', 'error');
+      throw err;
+    }
+  };
+
   const UnreadBadge = ({ count, className = '' }) => {
     if (!count) return null;
     return (
@@ -1347,6 +1387,7 @@ export default function ChatPage() {
           viewerId={user?.id}
           onClose={() => setViewingStars(null)}
           onDelete={handleDeleteStar}
+          onReply={handleReplyToStar}
         />
       )}
       {showGroupProfile && activeRoom?.type === 'group' && (
@@ -1906,6 +1947,9 @@ export default function ChatPage() {
                       : undefined
                   }
                 >
+                  {msg.star_reply && (
+                    <StarReplyPreview starReply={msg.star_reply} />
+                  )}
                   {msg.reply_to && (
                     <button
                       type="button"
@@ -1921,7 +1965,7 @@ export default function ChatPage() {
                     </button>
                   )}
                   {msg.attachment && (
-                    <div className={`${msg.content || msg.reply_to ? 'mb-1.5' : ''}`}>
+                    <div className={`${msg.content || msg.reply_to || msg.star_reply ? 'mb-1.5' : ''}`}>
                       <MessageAttachment attachment={msg.attachment} />
                     </div>
                   )}
