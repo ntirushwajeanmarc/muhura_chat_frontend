@@ -78,7 +78,7 @@ export default function AuthPage({ initialMode = 'login' }) {
       setForgotSent(true);
       setInfo(
         data.message
-          || 'If an account exists for that email, we sent a password reset link. Check your inbox and spam folder.'
+          || 'If an account exists for that exact email, we sent a reset link. Check inbox and spam (also Promotions). It can take a few minutes.'
       );
       startForgotCooldown();
     } catch (err) {
