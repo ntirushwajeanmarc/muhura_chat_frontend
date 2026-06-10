@@ -75,6 +75,7 @@ import { useToast } from '../context/ToastContext';
 import { applyMessageToChatLists, applyEditToChatLists } from '../utils/chatPreview';
 import { enqueueMessage, getQueuedMessages, removeQueuedMessage } from '../utils/offlineQueue';
 import { cacheRoomMessages, getCachedRoomMessages } from '../utils/messageCache';
+import { mergeMessages } from '../utils/mergeMessages';
 
 function roomLabel(room) {
   if (!room) return '';
@@ -121,7 +122,21 @@ function sumUnread(rooms, unread) {
 
 export default function ChatPage() {
   const { user, token, logout, updateSession } = useAuth();
-  const { joinRoom, joinRooms, setPresenceRoom, syncPresence, sendMessage, sendTyping, markRead, on, connected, reconnecting, socket } = useSocket(token);
+  const {
+    joinRoom,
+    joinRooms,
+    setPresenceRoom,
+    syncPresence,
+    sendMessage,
+    sendTyping,
+    markRead,
+    on,
+    onReconnect,
+    wake,
+    connected,
+    reconnecting,
+    socket,
+  } = useSocket(token);
   const { toast } = useToast();
   const {
     callState,
@@ -307,14 +322,44 @@ export default function ChatPage() {
     }
   }, []);
 
+  const resyncAfterReconnect = useCallback(() => {
+    const roomIds = allRoomsRef.current.map((r) => r.id).filter(Boolean);
+    if (roomIds.length) joinRooms(roomIds);
+    syncPresence();
+    loadUnreadCounts();
+    syncActiveRoomMessages();
+  }, [joinRooms, syncPresence, loadUnreadCounts, syncActiveRoomMessages]);
+
   useEffect(() => {
     if (!connected) return;
     if (!hadSocketConnectionRef.current) {
       hadSocketConnectionRef.current = true;
       return;
     }
-    loadUnreadCounts();
-  }, [connected, loadUnreadCounts]);
+    resyncAfterReconnect();
+  }, [connected, resyncAfterReconnect]);
+
+  useEffect(() => onReconnect(resyncAfterReconnect), [onReconnect, resyncAfterReconnect]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      wake();
+      syncPresence();
+      loadUnreadCounts();
+      syncActiveRoomMessages();
+    };
+    const onPageShow = () => onVisible();
+
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('online', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('online', onVisible);
+    };
+  }, [wake, syncPresence, loadUnreadCounts, syncActiveRoomMessages]);
 
   const totalUnread = Object.values(unread).reduce((sum, n) => sum + n, 0);
 
@@ -435,6 +480,24 @@ export default function ChatPage() {
       }
     }
   }, [scrollToBottom, toast]);
+
+  const syncActiveRoomMessages = useCallback(async () => {
+    const roomId = activeRoomIdRef.current;
+    if (!roomId) return;
+    try {
+      const { messages: latest } = await fetchRoomMessages(roomId);
+      setMessages((prev) => {
+        const merged = mergeMessages(prev, latest);
+        cacheRoomMessages(roomId, merged);
+        return merged;
+      });
+      if (stickToBottomRef.current) {
+        requestAnimationFrame(() => scrollToBottom('smooth'));
+      }
+    } catch {
+      /* keep existing messages */
+    }
+  }, [scrollToBottom]);
 
   const fetchReadState = useCallback(async (roomId) => {
     if (!roomId) return;
@@ -611,7 +674,7 @@ export default function ChatPage() {
   }, [messageActionsId, isMobile]);
 
   useEffect(() => {
-    if (!connected) return undefined;
+    if (!socket) return undefined;
 
     const offMsg = on('new_message', (msg) => {
       const isActiveRoom = msg.room_id === activeRoomIdRef.current;
@@ -768,7 +831,7 @@ export default function ChatPage() {
       offStar?.();
       offFollower?.();
     };
-  }, [connected, on, syncPresence, refreshChats, openRoomById, joinRoom, loadStarsFeed, chatListSetters, toast]);
+  }, [socket, on, syncPresence, refreshChats, openRoomById, joinRoom, loadStarsFeed, chatListSetters, toast]);
 
   useEffect(() => {
     if (stickToBottomRef.current) {

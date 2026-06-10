@@ -3,7 +3,21 @@ import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config';
 
 let socketInstance = null;
+let socketToken = null;
+let socketRefCount = 0;
+let hadSocketConnected = false;
 const joinedRooms = new Set();
+const reconnectListeners = new Set();
+
+function notifyReconnect() {
+  reconnectListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch (err) {
+      console.error('Socket reconnect listener error:', err);
+    }
+  });
+}
 
 export const useSocket = (token) => {
   const socketRef = useRef(null);
@@ -16,29 +30,65 @@ export const useSocket = (token) => {
       setConnected(false);
       setReconnecting(false);
       setSocket(null);
+      socketRef.current = null;
       return undefined;
+    }
+
+    const attachSocket = (s) => {
+      socketRef.current = s;
+      setSocket(s);
+      setConnected(s.connected);
+      setReconnecting(!s.connected);
+    };
+
+    if (socketInstance && socketToken === token) {
+      attachSocket(socketInstance);
+      socketRefCount += 1;
+      return () => {
+        socketRefCount -= 1;
+        if (socketRefCount <= 0) {
+          socketInstance.disconnect();
+          socketInstance = null;
+          socketToken = null;
+          socketRefCount = 0;
+          joinedRooms.clear();
+        }
+        socketRef.current = null;
+        setSocket(null);
+        setConnected(false);
+        setReconnecting(false);
+      };
     }
 
     if (socketInstance) {
       socketInstance.disconnect();
-      socketInstance = null;
+      joinedRooms.clear();
     }
 
-    const socket = io(SOCKET_URL, {
+    const s = io(SOCKET_URL, {
       auth: { token },
       path: '/socket.io',
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 20000,
     });
 
-    socketInstance = socket;
-    socketRef.current = socket;
-    setSocket(socket);
+    socketInstance = s;
+    socketToken = token;
+    socketRefCount = 1;
+    attachSocket(s);
 
     const onConnect = () => {
       setConnected(true);
       setReconnecting(false);
-      joinedRooms.forEach((roomId) => socket.emit('join_room', roomId));
+      joinedRooms.forEach((roomId) => s.emit('join_room', roomId));
+      if (hadSocketConnected) {
+        notifyReconnect();
+      }
+      hadSocketConnected = true;
     };
 
     const onDisconnect = (reason) => {
@@ -53,21 +103,28 @@ export const useSocket = (token) => {
       setReconnecting(true);
     };
 
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('connect_error', onConnectError);
-    if (socket.connected) onConnect();
+    s.on('connect', onConnect);
+    s.on('disconnect', onDisconnect);
+    s.on('connect_error', onConnectError);
+    if (s.connected) onConnect();
 
     return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-      socket.off('connect_error', onConnectError);
-      socket.disconnect();
-      socketInstance = null;
+      s.off('connect', onConnect);
+      s.off('disconnect', onDisconnect);
+      s.off('connect_error', onConnectError);
+      socketRefCount -= 1;
+      if (socketRefCount <= 0) {
+        s.disconnect();
+        socketInstance = null;
+        socketToken = null;
+        socketRefCount = 0;
+        joinedRooms.clear();
+        hadSocketConnected = false;
+      }
       socketRef.current = null;
+      setSocket(null);
       setConnected(false);
       setReconnecting(false);
-      setSocket(null);
     };
   }, [token]);
 
@@ -113,10 +170,24 @@ export const useSocket = (token) => {
   }, []);
 
   const on = useCallback((event, handler) => {
-    const socket = socketRef.current;
-    if (!socket) return () => {};
-    socket.on(event, handler);
-    return () => socket.off(event, handler);
+    const s = socketRef.current;
+    if (!s) return () => {};
+    s.on(event, handler);
+    return () => s.off(event, handler);
+  }, [socket]);
+
+  const onReconnect = useCallback((handler) => {
+    reconnectListeners.add(handler);
+    return () => reconnectListeners.delete(handler);
+  }, []);
+
+  const wake = useCallback(() => {
+    const s = socketRef.current;
+    if (!s) return;
+    if (!s.connected) {
+      setReconnecting(true);
+      s.connect();
+    }
   }, []);
 
   return {
@@ -129,6 +200,8 @@ export const useSocket = (token) => {
     markRead,
     sendTyping,
     on,
+    onReconnect,
+    wake,
     connected,
     reconnecting,
     socket,
