@@ -50,6 +50,7 @@ export function parseMessageContent(content) {
 }
 
 const URL_RE = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+const MENTION_RE = /@([a-zA-Z0-9_]{1,50})/g;
 
 function trimUrlPunctuation(url) {
   let trimmed = url;
@@ -90,28 +91,61 @@ function linkifyText(text) {
   return parts.length > 0 ? parts : [{ type: 'text', value: text }];
 }
 
+function formatTextSegment(text) {
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  MENTION_RE.lastIndex = 0;
+  while ((match = MENTION_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(...linkifyText(text.slice(lastIndex, match.index)));
+    }
+    parts.push({ type: 'mention', value: match[0], username: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(...linkifyText(text.slice(lastIndex)));
+  }
+
+  return parts.length > 0 ? parts : linkifyText(text);
+}
+
 function TextPart({ text }) {
   if (!text) return null;
   const hasNewlines = text.includes('\n');
-  const parts = linkifyText(text);
+  const parts = formatTextSegment(text);
 
   return (
     <span className={hasNewlines ? 'whitespace-pre-wrap break-words' : 'break-words'}>
-      {parts.map((part, i) =>
-        part.type === 'link' ? (
-          <a
-            key={i}
-            href={part.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sky-400 underline underline-offset-2 hover:text-sky-300 break-all"
-          >
-            {part.value}
-          </a>
-        ) : (
-          <React.Fragment key={i}>{part.value}</React.Fragment>
-        )
-      )}
+      {parts.map((part, i) => {
+        if (part.type === 'link') {
+          return (
+            <a
+              key={i}
+              href={part.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sky-400 underline underline-offset-2 hover:text-sky-300 break-all"
+            >
+              {part.value}
+            </a>
+          );
+        }
+        if (part.type === 'mention') {
+          return (
+            <span
+              key={i}
+              className="text-wa-accent-hover font-semibold"
+              title={`@${part.username}`}
+            >
+              {part.value}
+            </span>
+          );
+        }
+        return <React.Fragment key={i}>{part.value}</React.Fragment>;
+      })}
     </span>
   );
 }

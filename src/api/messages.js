@@ -19,3 +19,8 @@ export async function fetchMessageContext(roomId, messageId) {
   const res = await axios.get(`${BACKEND_URL}/api/rooms/${roomId}/messages/context/${messageId}`);
   return res.data;
 }
+
+export async function deleteMessage(roomId, messageId) {
+  const res = await axios.delete(`${BACKEND_URL}/api/rooms/${roomId}/messages/${messageId}`);
+  return res.data.message;
+}

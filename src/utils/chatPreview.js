@@ -29,3 +29,8 @@ export function applyEditToChatLists(roomId, msg, setters, isLastInRoom) {
   if (!isLastInRoom) return;
   applyMessageToChatLists(roomId, msg, setters);
 }
+
+export function applyDeleteToChatLists(roomId, msg, setters, isLastInRoom) {
+  if (!isLastInRoom) return;
+  applyMessageToChatLists(roomId, msg, setters);
+}

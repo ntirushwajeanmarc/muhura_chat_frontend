@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { BACKEND_URL } from '../config';
-import { fetchRoomMessages, fetchMessageContext } from '../api/messages';
+import { fetchRoomMessages, fetchMessageContext, deleteMessage } from '../api/messages';
 import {
   fetchChats,
   fetchUnreadCounts,
@@ -11,6 +11,7 @@ import {
   createGroupChat,
   addGroupMembers,
   fetchGroupMembers,
+  fetchMentionableUsers,
   discoverChannels,
   searchChannels,
   joinChannel,
@@ -21,6 +22,8 @@ import MessageAttachment from '../components/MessageAttachment';
 import PendingUploadBubble from '../components/PendingUploadBubble';
 import CopyButton from '../components/CopyButton';
 import EditButton from '../components/EditButton';
+import DeleteButton from '../components/DeleteButton';
+import MentionAutocomplete from '../components/MentionAutocomplete';
 import MessageReceipt from '../components/MessageReceipt';
 import { indexReadStates, getMessageReceiptStatus } from '../utils/readReceipts';
 import ReplyButton, { truncateReply } from '../components/ReplyButton';
@@ -72,7 +75,13 @@ import {
 } from 'lucide-react';
 import VirtualMessageList from '../components/VirtualMessageList';
 import { useToast } from '../context/ToastContext';
-import { applyMessageToChatLists, applyEditToChatLists } from '../utils/chatPreview';
+import { applyMessageToChatLists, applyEditToChatLists, applyDeleteToChatLists } from '../utils/chatPreview';
+import {
+  getMentionTrigger,
+  filterMentionCandidates,
+  insertMention,
+  isUserMentioned,
+} from '../utils/mentions';
 import { enqueueMessage, getQueuedMessages, removeQueuedMessage } from '../utils/offlineQueue';
 import { cacheRoomMessages, getCachedRoomMessages } from '../utils/messageCache';
 import { mergeMessages } from '../utils/mergeMessages';
@@ -173,6 +182,9 @@ export default function ChatPage() {
   const [editDraft, setEditDraft] = useState('');
   const [editError, setEditError] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [mentionableUsers, setMentionableUsers] = useState([]);
+  const [mentionTrigger, setMentionTrigger] = useState(null);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [roomReads, setRoomReads] = useState({});
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -628,6 +640,7 @@ export default function ChatPage() {
     setTypingUsers([]);
     setOnlineUsers([]);
     setReplyingTo(null);
+    setMentionTrigger(null);
     setEditingMessageId(null);
     setMessageActionsId(null);
     setEditDraft('');
@@ -637,6 +650,20 @@ export default function ChatPage() {
       return null;
     });
   }, [activeRoom, joinRoom, setPresenceRoom, loadInitialMessages, fetchReadState]);
+
+  useEffect(() => {
+    if (!activeRoom?.id) {
+      setMentionableUsers([]);
+      return;
+    }
+    if (activeRoom.type === 'direct' && activeRoom.peer) {
+      setMentionableUsers([activeRoom.peer]);
+      return;
+    }
+    fetchMentionableUsers(activeRoom.id)
+      .then(setMentionableUsers)
+      .catch(() => setMentionableUsers([]));
+  }, [activeRoom?.id, activeRoom?.type, activeRoom?.peer?.id]);
 
   useEffect(() => {
     if (!connected || !activeRoom || messages.length === 0) return;
@@ -682,7 +709,12 @@ export default function ChatPage() {
         if (shouldNotify) {
           const room = allRoomsRef.current.find((r) => r.id === msg.room_id);
           const chatName = room ? roomLabel(room) : msg.username;
-          const notifyTitle = room?.type === 'direct' ? msg.username : `${msg.username} in ${chatName}`;
+          const mentioned = isUserMentioned(msg.content, userRef.current?.username);
+          const notifyTitle = mentioned
+            ? `${msg.username} mentioned you`
+            : room?.type === 'direct'
+              ? msg.username
+              : `${msg.username} in ${chatName}`;
           showMessageNotification({
             title: notifyTitle,
             body: messagePreview(msg),
@@ -764,6 +796,22 @@ export default function ChatPage() {
         applyEditToChatLists(msg.room_id, msg, chatListSetters, false);
       }
     });
+    const offDeleted = on('message_deleted', (msg) => {
+      const isActiveRoom = msg.room_id === activeRoomIdRef.current;
+      if (isActiveRoom) {
+        setMessages((prev) => {
+          const next = prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m));
+          cacheRoomMessages(msg.room_id, next);
+          const last = next[next.length - 1];
+          applyDeleteToChatLists(msg.room_id, msg, chatListSetters, last?.id === msg.id);
+          return next;
+        });
+        setEditingMessageId((id) => (id === msg.id ? null : id));
+        setEditDraft((draft) => (draft && msg.id ? '' : draft));
+      } else {
+        applyDeleteToChatLists(msg.room_id, msg, chatListSetters, false);
+      }
+    });
     const offLike = on('message_like_updated', (payload) => {
       if (payload.room_id !== activeRoomIdRef.current) return;
       setMessages((prev) =>
@@ -820,6 +868,7 @@ export default function ChatPage() {
       offUserPresence?.();
       offTyping?.();
       offEdited?.();
+      offDeleted?.();
       offLike?.();
       offRead?.();
       offStar?.();
@@ -890,9 +939,77 @@ export default function ChatPage() {
     }
     setInput('');
     setReplyingTo(null);
+    setMentionTrigger(null);
     sendTyping(activeRoom.id, false);
     stickToBottomRef.current = true;
     requestAnimationFrame(() => scrollToBottom('smooth'));
+  };
+
+  const mentionCandidates = useMemo(
+    () => filterMentionCandidates(mentionableUsers, mentionTrigger?.query, user?.username),
+    [mentionableUsers, mentionTrigger?.query, user?.username]
+  );
+
+  useEffect(() => {
+    setMentionActiveIndex(0);
+  }, [mentionTrigger?.query, mentionCandidates.length]);
+
+  const selectMention = useCallback((mentionUser) => {
+    if (!mentionTrigger || !inputRef.current) return;
+    const { text, cursorPos } = insertMention(
+      input,
+      inputRef.current.selectionStart,
+      mentionTrigger.start,
+      mentionUser.username
+    );
+    setInput(text);
+    setMentionTrigger(null);
+    requestAnimationFrame(() => {
+      if (!inputRef.current) return;
+      inputRef.current.selectionStart = cursorPos;
+      inputRef.current.selectionEnd = cursorPos;
+      inputRef.current.focus();
+    });
+  }, [mentionTrigger, input]);
+
+  const handleComposerKeyDown = (e) => {
+    const mentionOpen = mentionTrigger && mentionCandidates.length > 0;
+
+    if (e.key === 'Escape') {
+      if (mentionOpen) {
+        e.preventDefault();
+        setMentionTrigger(null);
+        return;
+      }
+      if (replyingTo) {
+        e.preventDefault();
+        setReplyingTo(null);
+      }
+      return;
+    }
+
+    if (mentionOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionActiveIndex((i) => Math.min(i + 1, mentionCandidates.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionActiveIndex((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        selectMention(mentionCandidates[mentionActiveIndex]);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend(e);
+    }
   };
 
   const handleGifSelect = async (gif) => {
@@ -958,7 +1075,9 @@ export default function ChatPage() {
   };
 
   const handleInputChange = (e) => {
-    setInput(e.target.value);
+    const value = e.target.value;
+    setInput(value);
+    setMentionTrigger(getMentionTrigger(value, e.target.selectionStart));
     sendTyping(activeRoom?.id, true);
     clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => sendTyping(activeRoom?.id, false), 1500);
@@ -967,6 +1086,7 @@ export default function ChatPage() {
   const formatTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const startReply = (msg) => {
+    if (msg.deleted_at) return;
     setReplyingTo({
       id: msg.id,
       username: msg.username,
@@ -986,6 +1106,24 @@ export default function ChatPage() {
     setEditingMessageId(null);
     setEditDraft('');
     setEditError(null);
+  };
+
+  const unsendMessage = async (msg) => {
+    if (!activeRoom || !msg?.id || msg.deleted_at) return;
+    try {
+      const updated = await deleteMessage(activeRoom.id, msg.id);
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === msg.id ? updated : m));
+        cacheRoomMessages(activeRoom.id, next);
+        const last = next[next.length - 1];
+        applyDeleteToChatLists(activeRoom.id, updated, chatListSetters, last?.id === msg.id);
+        return next;
+      });
+      if (editingMessageId === msg.id) cancelEdit();
+      setMessageActionsId(null);
+    } catch (err) {
+      toast(err.response?.data?.error || 'Could not unsend message', 'error');
+    }
   };
 
   const saveEdit = async (msg) => {
@@ -1025,7 +1163,9 @@ export default function ChatPage() {
       const prev = msgs[i - 1];
       const isCall = msg.message_type === 'call' || (msg.call_status && msg.call_type);
       const prevIsCall = prev?.message_type === 'call' || (prev?.call_status && prev?.call_type);
-      const sameUser = !isCall && !prevIsCall && prev?.username === msg.username;
+      const isDeleted = !!msg.deleted_at;
+      const prevDeleted = !!prev?.deleted_at;
+      const sameUser = !isCall && !prevIsCall && !isDeleted && !prevDeleted && prev?.username === msg.username;
       const sameMinute = prev && Math.abs(new Date(msg.created_at) - new Date(prev.created_at)) < 60000;
       grouped.push({ ...msg, grouped: sameUser && sameMinute });
     });
@@ -2037,6 +2177,19 @@ export default function ChatPage() {
                       : undefined
                   }
                 >
+                  {msg.deleted_at ? (
+                    <div className={`flex flex-wrap items-end gap-x-2 gap-y-0.5 ${isOwn(msg) ? 'justify-end' : 'justify-start'}`}>
+                      <span className="italic text-wa-muted text-sm">
+                        {isOwn(msg) ? 'You deleted this message' : 'This message was deleted'}
+                      </span>
+                      <div className="inline-flex items-center gap-1 shrink-0 self-end pb-0.5">
+                        {(isOwn(msg) || msg.grouped) && (
+                          <span className="text-[10px] text-wa-muted/90">{formatTime(msg.created_at)}</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                  <>
                   {msg.star_reply && (
                     <StarReplyPreview starReply={msg.star_reply} />
                   )}
@@ -2132,8 +2285,10 @@ export default function ChatPage() {
                   {!isOwn(msg) && !msg.content && msg.grouped && editingMessageId !== msg.id && (
                     <span className="block text-[10px] text-wa-muted text-right mt-0.5">{formatTime(msg.created_at)}</span>
                   )}
+                  </>
+                  )}
                 </div>
-                {editingMessageId !== msg.id && (
+                {!msg.deleted_at && editingMessageId !== msg.id && (
                   <div
                     className={`flex items-center gap-0.5 mt-0.5 px-0.5 transition-opacity ${
                       isMobile
@@ -2148,10 +2303,16 @@ export default function ChatPage() {
                       className="flex items-center justify-center w-7 h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-wa-surface/80"
                     />
                     {isOwn(msg) && (
-                      <EditButton
-                        onClick={() => startEdit(msg)}
-                        className="flex items-center justify-center w-7 h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-wa-surface/80"
-                      />
+                      <>
+                        <EditButton
+                          onClick={() => startEdit(msg)}
+                          className="flex items-center justify-center w-7 h-7 rounded-md text-wa-muted hover:text-slate-200 hover:bg-wa-surface/80"
+                        />
+                        <DeleteButton
+                          onClick={() => unsendMessage(msg)}
+                          className="flex items-center justify-center w-7 h-7 rounded-md text-wa-muted hover:text-red-400 hover:bg-wa-surface/80"
+                        />
+                      </>
                     )}
                     {msg.content && (
                       <CopyButton
@@ -2209,7 +2370,12 @@ export default function ChatPage() {
                 accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
                 onChange={handleFileSelect}
               />
-              <div className="flex-1 min-w-0 flex items-end gap-1 bg-wa-surface border border-wa-border rounded-xl px-1.5 py-1 focus-within:border-wa-accent transition-colors">
+              <div className="relative flex-1 min-w-0 flex items-end gap-1 bg-wa-surface border border-wa-border rounded-xl px-1.5 py-1 focus-within:border-wa-accent transition-colors">
+                <MentionAutocomplete
+                  candidates={mentionTrigger ? mentionCandidates : []}
+                  activeIndex={mentionActiveIndex}
+                  onSelect={selectMention}
+                />
                 <ComposerPlusMenu
                   compact
                   disabled={!activeRoom}
@@ -2224,18 +2390,8 @@ export default function ChatPage() {
                   className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm py-1.5 min-h-8 max-h-32 resize-none placeholder:text-wa-muted"
                   value={input}
                   onChange={handleInputChange}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape' && replyingTo) {
-                      e.preventDefault();
-                      setReplyingTo(null);
-                      return;
-                    }
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend(e);
-                    }
-                  }}
-                  placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : placeholder}
+                  onKeyDown={handleComposerKeyDown}
+                  placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : 'Message… type @ to mention'}
                   disabled={!activeRoom}
                   rows={1}
                 />
@@ -2284,7 +2440,12 @@ export default function ChatPage() {
                 accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
                 onChange={handleFileSelect}
               />
-              <div className="flex-1 min-w-0 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors">
+              <div className="relative flex-1 min-w-0 flex items-end gap-2 bg-wa-surface border border-wa-border rounded-xl px-2 py-1.5 focus-within:border-wa-accent transition-colors">
+                <MentionAutocomplete
+                  candidates={mentionTrigger ? mentionCandidates : []}
+                  activeIndex={mentionActiveIndex}
+                  onSelect={selectMention}
+                />
                 <ComposerPlusMenu
                   disabled={!activeRoom}
                   uploading={uploading}
@@ -2298,18 +2459,8 @@ export default function ChatPage() {
                   className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm py-2 min-h-9 max-h-40 resize-none placeholder:text-wa-muted"
                   value={input}
                   onChange={handleInputChange}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape' && replyingTo) {
-                      e.preventDefault();
-                      setReplyingTo(null);
-                      return;
-                    }
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend(e);
-                    }
-                  }}
-                  placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : placeholder}
+                  onKeyDown={handleComposerKeyDown}
+                  placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : 'Message… type @ to mention'}
                   disabled={!activeRoom}
                   rows={1}
                 />

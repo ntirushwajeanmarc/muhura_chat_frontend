@@ -54,6 +54,7 @@ export function showMessageNotification({ title, body, roomId, onClick }) {
 }
 
 export function messagePreview(msg, viewerId = null) {
+  if (msg.deleted_at) return 'Message deleted';
   if (msg.message_type === 'call') {
     const isVideo = msg.call_type === 'video';
     const kind = isVideo ? 'Video call' : 'Voice call';

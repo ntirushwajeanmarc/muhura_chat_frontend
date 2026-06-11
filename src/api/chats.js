@@ -31,6 +31,11 @@ export async function fetchGroupMembers(roomId) {
   return res.data;
 }
 
+export async function fetchMentionableUsers(roomId) {
+  const res = await axios.get(`${BACKEND_URL}/api/rooms/${roomId}/mentionable-users`);
+  return res.data;
+}
+
 export async function addGroupMembers(roomId, memberIds) {
   const res = await axios.post(`${BACKEND_URL}/api/chats/groups/${roomId}/members`, { memberIds });
   return res.data;
